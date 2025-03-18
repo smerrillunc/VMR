@@ -92,7 +92,7 @@ def extract_audio_features(audio_path):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Read file content.')
 
-  parser.add_argument("-s", "--stat_index", type=int, default=0, help='YoutubeID Index to start on in YoutubeID File')
+  parser.add_argument("-s", "--start_index", type=int, default=0, help='YoutubeID Index to start on in YoutubeID File')
   parser.add_argument("-e", "--end_index", type=int, default=100, help='YoutubeID Index to end on in YoutubeID File')
   parser.add_argument("-p", "--path", type=str, default='/Users/scottmerrill/Desktop', help='Path to YoutubeID file.  This will also be where output featuers are saved')
   args = vars(parser.parse_args())
@@ -121,22 +121,18 @@ if __name__ == '__main__':
       content = file.read()  # Read the entire content of the file
   youtube_urls = content.split('\n')
 
-  youtube_urls = youtube_urls[args['stat_index']:args['end_index']]
-
+  youtube_urls = youtube_urls[args['start_index']:args['end_index']]
 
   for video_url in tqdm.tqdm(youtube_urls):
-      # video id
+      # video id      
       vid = video_url.split('=')[1]
       print(f"processing VID: {vid}")
-      # delete files if they exist
-      delete_file(args['path'] + '/tmp.mp4')
-      delete_file(args['path'] + '/tmp.mp3')
-      
+
       try:
           ydl_opts = {
               'quiet': True,  # Suppresses verbose output
               'format': 'mp4',  # Directly download the best MP4 format available
-              'outtmpl': 'tmp.%(ext)s',  # Customize output filename
+              'outtmpl': f'{vid}.%(ext)s',  # Customize output filename
               'noplaylist': True,  # Ensure only the video itself is downloaded, not a playlist
               'postprocessor_args': [
                   '-ss', '00:00:00',  # Start from the beginning of the video
@@ -150,18 +146,18 @@ if __name__ == '__main__':
 
 
           # once we download all training features, we have to do pca whitening
-          video_feats = extract_video_features('tmp.mp4')
+          video_feats = extract_video_features(args['path'] + f'/{vid}.mp4')
           
           # convert mp4 to mp3 and get audio features
           
           # Load MP4 file and extract audio
-          audio = AudioFileClip(args['path'] + "/tmp.mp4")
+          audio = AudioFileClip(args['path'] + f'/{vid}.mp4')
             
           # Write audio to MP3 file
-          audio.write_audiofile(args['path'] + "/tmp.mp3")
+          audio.write_audiofile(args['path'] + f'/{vid}.mp3')
 
           #_ = ffmpeg.input('tmp.mp4').output('tmp.mp3').global_args('-loglevel', 'quiet', '-y').run()
-          audio_feats = extract_audio_features(args['path'] + "/tmp.mp3")
+          audio_feats = extract_audio_features(args['path'] + f'/{vid}.mp3')
       
           np.save(args['path'] + f'/video/{vid}.npy', video_feats)
           np.save(args['path'] + f'/audio/{vid}.npy', audio_feats)        
@@ -170,6 +166,10 @@ if __name__ == '__main__':
 
       except Exception as e:
           print(video_url, e)   
+
+      # delete files if they exist
+      delete_file(args['path'] + f'/{vid}.mp4')
+      delete_file(args['path'] + f'/{vid}.mp3')
 
 
       

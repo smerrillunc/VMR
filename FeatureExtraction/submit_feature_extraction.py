@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import itertools
 
 
@@ -22,7 +23,7 @@ python FeatureExtraction.py --start_index {start_index} --end_index {end_index} 
 parameters_list = []
 
 
-for start_index np.arange(0, 200000, 1000):
+for start_index in np.arange(0, 200000, 1000):
     end_index = start_index + 1000
     tmp = {'start_index':start_index,
            'end_index':end_index}

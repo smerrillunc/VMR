@@ -2,6 +2,7 @@
 
 import yt_dlp
 import os
+import gc
 
 import cv2
 import torch
@@ -13,7 +14,9 @@ from sklearn.decomposition import PCA
 import torchaudio
 from torchaudio.prototype.pipelines import VGGISH
 
-import ffmpeg
+#import ffmpeg
+from moviepy import AudioFileClip
+
 import tqdm
 import argparse
 
@@ -145,18 +148,29 @@ if __name__ == '__main__':
           with yt_dlp.YoutubeDL(ydl_opts) as ydl:
               ydl.download([video_url])
 
+
           # once we download all training features, we have to do pca whitening
           video_feats = extract_video_features('tmp.mp4')
           
           # convert mp4 to mp3 and get audio features
-          _ = ffmpeg.input('tmp.mp4').output('tmp.mp3').global_args('-loglevel', 'quiet', '-y').run()
-          audio_feats = extract_audio_features('tmp.mp3')
-              
+          
+          # Load MP4 file and extract audio
+          audio = AudioFileClip(args['path'] + "/tmp.mp4")
+            
+          # Write audio to MP3 file
+          audio.write_audiofile(args['path'] + "/tmp.mp3")
+
+          #_ = ffmpeg.input('tmp.mp4').output('tmp.mp3').global_args('-loglevel', 'quiet', '-y').run()
+          audio_feats = extract_audio_features(args['path'] + "/tmp.mp3")
+      
+          np.save(args['path'] + f'/video/{vid}.npy', video_feats)
+          np.save(args['path'] + f'/audio/{vid}.npy', audio_feats)        
+          del video_feats, audio_feats
+          gc.collect()
+
       except Exception as e:
           print(video_url, e)   
 
-      np.save(args['path'] + f'/video/{vid}.npy', video_feats)
-      np.save(args['path'] + f'/audio/{vid}.npy', audio_feats)        
 
       
   print("Download Complete")

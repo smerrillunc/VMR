@@ -115,6 +115,8 @@ if __name__ == '__main__':
   os.makedirs(args['path'] + '/video', exist_ok=True)
   os.makedirs(args['path'] + '/audio', exist_ok=True)
 
+  downloaded_vids = os.listdir(args['path'] + '/audio')
+  downloaded_vids = [x.split('.')[0] for x in downloaded_vids]
 
   # Here are the youtube ids used by original VM-NET
   with open(args['path'] + '/Youtube_ID.txt', 'r') as file:
@@ -126,6 +128,12 @@ if __name__ == '__main__':
   for video_url in tqdm.tqdm(youtube_urls):
       # video id      
       vid = video_url.split('=')[1]
+
+      if vid in downloaded_vids:
+        print(f"VID: {vid} alread processed, skipping")
+        continue
+
+
       print(f"processing VID: {vid}")
 
       try:
@@ -138,6 +146,8 @@ if __name__ == '__main__':
                   '-ss', '00:00:00',  # Start from the beginning of the video
                   '-t', '360',  # Limit to 360 seconds (6 minutes)
               ],
+              'cookiefile': args['path'] + '/cookies.txt',  # Use cookies from the file
+
           }
 
           # download youtube video

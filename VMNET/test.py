@@ -15,8 +15,8 @@ flags.DEFINE_integer('num_layer_y',2, 'Constraint Weight yx')
 flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.') #flags.DEFINE_integer('test_batch_size', 1000, 'Test batch size.')
 
 # CHANGE YOUR OWN PATH CONFIGS BEFORE RUNNING!!!!!!
-flags.DEFINE_string('test_data_dir', "path/to/data_dir/test", 'Directory to contain audio and rgb for test samples.')
-flags.DEFINE_string('test_csv_path', "/path/to/test.csv", 'Path to the csv recording all test samples')
+flags.DEFINE_string('test_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
+flags.DEFINE_string('test_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/test.csv", 'Path to the csv recording all test samples')
 flags.DEFINE_string('summaries_dir', "./models/MV_9k_efficient_b5_Avgpool_MUSICNN_penultimate_Structure_Nonlinear_single_loss_margin_0.5_emb_512_epochs_101_GlobalAvg", 'Directory to put the summary and log data.')
 
 flags.DEFINE_integer('constraint_xy', 3, 'Constraint Weight xy')
@@ -26,7 +26,7 @@ flags.DEFINE_float('constraint_y', 0.2, 'Constraint Structure Weight y')
 
 net_opts = Model_structure.OPTS()
 net_opts.network_name = 'Wrapping Network'
-net_opts.x_dim = 500
+net_opts.x_dim = 128
 net_opts.y_dim = 2048  # CHANGE THE VIDEO FEAT DIM IF YOU USE DIFFERENT MODEL FOR VISUAL FEATURE EXTARCTION
 net_opts.x_num_layer = FLAGS.num_layer_x
 net_opts.y_num_layer = FLAGS.num_layer_y
@@ -41,6 +41,8 @@ print('finished loading TEST samples and infering aff_test_xy')
 batch_num = test_feats[0].shape[0]//FLAGS.test_batch_size
 
 Recall_xy, Recall_yx = [], []
+AV_align = []
+fad_scores = []
 
 saver = tf.train.Saver(tf.global_variables())
 with tf.Session() as sess:
@@ -61,18 +63,42 @@ with tf.Session() as sess:
             print('Session restored successfully. step: {0}'.format(step))
             for i in range(batch_num):
                 x_batch, y_batch, aff_xy =  sess.run([x_test_batch, y_test_batch, aff_test_xy])
-                xy, yx, xy_idx, yx_idx = sess.run([net.recall_xy, net.recall_yx, net.xy_idx, net.yx_idx], feed_dict={
+                xy, yx, xy_idx, yx_idx, av_align = sess.run([net.recall_xy, net.recall_yx, net.xy_idx, net.yx_idx, net.av_align_score], 
+                                                        feed_dict={
+                                                            net.x_data: x_batch,
+                                                            net.y_data: y_batch,
+                                                            net.K: K,
+                                                            net.aff_xy: aff_xy,
+                                                            net.keep_prob: 1.,
+                                                            net.is_training: False
+                                                        })
+                # Compute FAD for this batch
+                fad_score = sess.run(net.fad, feed_dict={
                     net.x_data: x_batch,
                     net.y_data: y_batch,
-                    net.K: K,
                     net.aff_xy: aff_xy,
-                    net.keep_prob: 1., net.is_training: False})  # actually, False
+                    net.K: K,
+                    net.keep_prob: 1.,
+                    net.is_training: False
+                })
+
+                fad_scores.append(fad_score)
+
+                # Calculate final FAD metric
+
+                AV_align.append(av_align)
+
                 print("[batch %d] xy: %s, yx: %s, " % (i, xy, yx))
                 Recall_xy.append(np.asarray(xy, dtype = float))
                 Recall_yx.append(np.asarray(yx, dtype = float))
                 print("=" * 130)
+
+            overall_fad = np.mean(fad_scores)
             overall_xy_recall = np.mean(np.stack(Recall_xy), axis = 0)
             overall_yx_recall = np.mean(np.stack(Recall_yx), axis = 0)
+            overall_av_align = np.mean(AV_align)
+            print("\nOverall AV-align Score: {:.4f}".format(overall_av_align))
+            print("\nOverall FAD Score: {:.4f}".format(overall_fad))
             print("Overall xy R@1={}, R@5={}, R@10={}, R@20={}, R@50={}, R@100={}".format(overall_xy_recall[0], overall_xy_recall[1], overall_xy_recall[2], overall_xy_recall[3], overall_xy_recall[4], overall_xy_recall[5]))
             print("Overall yx R@1={}, R@5={}, R@10={}, R@20={}, R@50={}, R@100={}".format(overall_yx_recall[0], overall_yx_recall[1], overall_yx_recall[2], overall_yx_recall[3], overall_yx_recall[4], overall_yx_recall[5]))
 

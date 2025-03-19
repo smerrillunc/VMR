@@ -11,7 +11,7 @@ import embed_network_video as env
 import embed_loss as el
 import embed_structure_loss as esl
 import eval
-
+import tensorflow_probability as tfp
 import OPTS
 
 
@@ -107,7 +107,14 @@ class Model_structure:
 
         eval_net = eval.Recall(eval_opts)
 
-        self.recall_xy, self.recall_yx, self.xy_idx, self.yx_idx = eval_net.construct(self.x_embed, self.y_embed, self.aff_xy, [1, 5, 10, 20, 50, 100])
+        self.recall_xy, self.recall_yx, self.xy_idx, self.yx_idx, self.top1_xy_idx, self.top1_yx_idx = eval_net.construct(self.x_embed, self.y_embed, self.aff_xy, [1, 5, 10, 20, 50, 100])
+
+        # Calculate FAD
+        self.fad = self.compute_fad()
+
+
+        # calculate av-align score
+        self.av_align_score = self.compute_av_align_score()
 
         # self.debug_list = el_net.debug_list
 
@@ -156,4 +163,59 @@ class Model_structure:
                                      initializer=tf.initializers.constant(0.0))
             fc = tf.nn.xw_plus_b(tensor, weights, biases)
             return fc
+
+    def compute_fad_alt(self):
+        # Get the top 1 retrieved audio embeddings
+        top1_retrieved_audio = tf.gather(self.x_embed, self.top1_yx_idx[:, 0])
+        
+        # Calculate mean and covariance with added epsilon for numerical stability
+        epsilon = 1e-6
+        mu_retrieved = tf.reduce_mean(top1_retrieved_audio, axis=0)
+        sigma_retrieved = tfp.stats.covariance(top1_retrieved_audio) + epsilon * tf.eye(tf.shape(self.x_embed)[1])
+        
+        mu_ground_truth = tf.reduce_mean(self.y_embed, axis=0)
+        sigma_ground_truth = tfp.stats.covariance(self.y_embed) + epsilon * tf.eye(tf.shape(self.y_embed)[1])
+        
+        # Calculate Fréchet distance with safeguards
+        diff = mu_retrieved - mu_ground_truth
+        covmean_sq = tf.matmul(tf.matmul(sigma_retrieved, sigma_ground_truth), sigma_retrieved)
+        covmean = tf.linalg.sqrtm(covmean_sq + epsilon * tf.eye(tf.shape(covmean_sq)[0]))
+        
+        tr_covmean = tf.linalg.trace(covmean)
+        
+        fad = tf.reduce_sum(tf.square(diff)) + tf.linalg.trace(sigma_retrieved) + tf.linalg.trace(sigma_ground_truth) - 2 * tr_covmean
+        
+        return tf.maximum(fad, 0.0)  # Ensure non-negative
+
+
+    def compute_fad(self):
+        top1_retrieved_audio = tf.gather(self.x_embed, self.top1_yx_idx[:, 0])
+        
+        mu1, var1 = tf.nn.moments(top1_retrieved_audio, axes=[0])
+        mu2, var2 = tf.nn.moments(self.y_embed, axes=[0])
+        
+        diff = mu1 - mu2
+        covmean = tf.sqrt(tf.multiply(var1, var2))
+        
+        fad = tf.reduce_sum(tf.square(diff)) + tf.reduce_sum(var1) + tf.reduce_sum(var2) - 2 * tf.reduce_sum(covmean)
+        return tf.maximum(fad, 0.0)
+
+    def compute_av_align_score(self):
+        # Normalize embeddings
+        x_embed_norm = tf.nn.l2_normalize(self.x_embed, axis=1)
+        y_embed_norm = tf.nn.l2_normalize(self.y_embed, axis=1)
+        
+        # Get top-1 retrieved audio embeddings for each video query
+        _, top1_indices = tf.nn.top_k(tf.matmul(y_embed_norm, x_embed_norm, transpose_b=True), k=1)
+        top1_retrieved = tf.gather(x_embed_norm, tf.squeeze(top1_indices))
+        
+        # Compute cosine similarity between top-1 retrieved and ground truth
+        cosine_similarities = tf.reduce_sum(top1_retrieved * y_embed_norm, axis=1)
+        
+        # Compute average similarity (AV-align score)
+        self.av_align_score = tf.reduce_mean(cosine_similarities)
+        
+        return self.av_align_score
+
+
 

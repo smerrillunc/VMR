@@ -10,6 +10,7 @@ import ipdb
 from network_structure import Model_structure
 from utils.Logger import Logger
 from utils.dataiter import FeatLoader, GetBatch
+import traceback
 
 flags = tf.flags
 FLAGS = flags.FLAGS
@@ -32,10 +33,10 @@ flags.DEFINE_integer('validation_batch_size', 1024, 'Validation Batch size.')
 flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.')
 
 # CHANGE YOUR OWN PATH CONFIGS BEFORE RUNNING!!!!!!
-flags.DEFINE_string('train_data_dir', "//Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for training samples.')
-flags.DEFINE_string('train_csv_path', "//Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/train.csv", 'Path to the csv recording all training samples')
-flags.DEFINE_string('test_data_dir', "//Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
-flags.DEFINE_string('test_csv_path', "//Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/test.csv", 'Path to the csv recording all test samples')
+flags.DEFINE_string('train_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for training samples.')
+flags.DEFINE_string('train_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/train.csv", 'Path to the csv recording all training samples')
+flags.DEFINE_string('test_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
+flags.DEFINE_string('test_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/test.csv", 'Path to the csv recording all test samples')
 flags.DEFINE_string('summaries_dir', "./models/MV_9k_efficient_b5_Avgpool_MUSICNN_penultimate_Structure_Nonlinear_single_loss_margin_0.5_emb_512_epochs_101_GlobalAvg", 'Directory to put the summary and log data.')
 
 # You can change your own save_step based on the vacant space on your computer.
@@ -125,8 +126,6 @@ with tf.Session(config=config) as sess:
 
     max_step_acc_xy = [0, -5e3]
     max_step_acc_yx = [0, -5e3]
-    print('HERERERE')
-    import traceback
 
     try:
         print(max_steps)
@@ -135,7 +134,6 @@ with tf.Session(config=config) as sess:
             p = float(i) / max_steps
             lamb = 0
             learning_rate = sess.run(learning_rate_)
-            print("No1")
             x_batch, y_batch, aff_xy = sess.run([x_train_batch, y_train_batch, aff_train_xy])
             sess.run(optimizer,feed_dict={
                               net.x_data:x_batch,

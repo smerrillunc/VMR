@@ -63,7 +63,12 @@ class Recall:
       recall_k_xy.append(tf.reduce_mean(xy_result))
       recall_k_yx.append(tf.reduce_mean(yx_result))
 
-    return recall_k_xy, recall_k_yx, recall_k_xy_idx, recall_k_yx_idx
+    _, top1_xy_idx = tf.nn.top_k(dist_xy, k=1)
+    _, top1_yx_idx = tf.nn.top_k(tf.transpose(dist_xy), k=1)
+
+    return recall_k_xy, recall_k_yx, recall_k_xy_idx, recall_k_yx_idx, top1_xy_idx, top1_yx_idx
+
+        
 
 if __name__ == '__main__':
   rec_opts = Recall.OPTS()

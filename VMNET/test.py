@@ -15,9 +15,16 @@ flags.DEFINE_integer('num_layer_y',2, 'Constraint Weight yx')
 flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.') #flags.DEFINE_integer('test_batch_size', 1000, 'Test batch size.')
 
 # CHANGE YOUR OWN PATH CONFIGS BEFORE RUNNING!!!!!!
-flags.DEFINE_string('test_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
-flags.DEFINE_string('test_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/test.csv", 'Path to the csv recording all test samples')
-flags.DEFINE_string('summaries_dir', "./models/MV_9k_efficient_b5_Avgpool_MUSICNN_penultimate_Structure_Nonlinear_single_loss_margin_0.5_emb_512_epochs_101_GlobalAvg", 'Directory to put the summary and log data.')
+# local
+#flags.DEFINE_string('test_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
+#flags.DEFINE_string('test_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/test.csv", 'Path to the csv recording all test samples')
+#flags.DEFINE_string('summaries_dir', "./models/MV_9k_efficient_b5_Avgpool_MUSICNN_penultimate_Structure_Nonlinear_single_loss_margin_0.5_emb_512_epochs_101_GlobalAvg", 'Directory to put the summary and log data.')
+
+#longleaf
+flags.DEFINE_string('test_data_dir', "/proj/mcavoy_lab/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
+flags.DEFINE_string('test_csv_path', "/proj/mcavoy_lab/Youtube8m/test.csv", 'Path to the csv recording all test samples')
+flags.DEFINE_string('summaries_dir', "/proj/mcavoy_lab/Youtube8m//models/VMNET", 'Directory to put the summary and log data.')
+
 
 flags.DEFINE_integer('constraint_xy', 3, 'Constraint Weight xy')
 flags.DEFINE_integer('constraint_yx',1, 'Constraint Weight yx')

@@ -33,11 +33,19 @@ flags.DEFINE_integer('validation_batch_size', 1024, 'Validation Batch size.')
 flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.')
 
 # CHANGE YOUR OWN PATH CONFIGS BEFORE RUNNING!!!!!!
-flags.DEFINE_string('train_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for training samples.')
-flags.DEFINE_string('train_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/train.csv", 'Path to the csv recording all training samples')
-flags.DEFINE_string('test_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
-flags.DEFINE_string('test_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/test.csv", 'Path to the csv recording all test samples')
-flags.DEFINE_string('summaries_dir', "./models/MV_9k_efficient_b5_Avgpool_MUSICNN_penultimate_Structure_Nonlinear_single_loss_margin_0.5_emb_512_epochs_101_GlobalAvg", 'Directory to put the summary and log data.')
+# local
+#flags.DEFINE_string('train_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for training samples.')
+#flags.DEFINE_string('train_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/train.csv", 'Path to the csv recording all training samples')
+#flags.DEFINE_string('test_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
+#flags.DEFINE_string('test_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/test.csv", 'Path to the csv recording all test samples')
+#flags.DEFINE_string('summaries_dir', "./models/MV_9k_efficient_b5_Avgpool_MUSICNN_penultimate_Structure_Nonlinear_single_loss_margin_0.5_emb_512_epochs_101_GlobalAvg", 'Directory to put the summary and log data.')
+
+# longleaf
+flags.DEFINE_string('train_data_dir', "/proj/mcavoy_lab/Youtube8m/", 'Directory to contain audio and rgb for training samples.')
+flags.DEFINE_string('train_csv_path', "/proj/mcavoy_lab/Youtube8m/train.csv", 'Path to the csv recording all training samples')
+flags.DEFINE_string('test_data_dir', "/proj/mcavoy_lab/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
+flags.DEFINE_string('test_csv_path', "/proj/mcavoy_lab/Youtube8m/test.csv", 'Path to the csv recording all test samples')
+flags.DEFINE_string('summaries_dir', "/proj/mcavoy_lab/Youtube8m//models/VMNET", 'Directory to put the summary and log data.')
 
 # You can change your own save_step based on the vacant space on your computer.
 flags.DEFINE_integer('display_step', 10, 'Train display step.')

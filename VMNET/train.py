@@ -11,6 +11,7 @@ from network_structure import Model_structure
 from utils.Logger import Logger
 from utils.dataiter import FeatLoader, GetBatch
 import traceback
+import tqdm
 
 flags = tf.flags
 FLAGS = flags.FLAGS
@@ -27,7 +28,7 @@ flags.DEFINE_integer('train_top_K', 1024, 'Top most K number for violation')
 flags.DEFINE_integer('test_top_K', 1024, 'Top most K number for violation')
 flags.DEFINE_float('weight_decay', 0, 'Weight decay.')
 
-flags.DEFINE_integer('num_epochs', 202, 'number of epochs')
+flags.DEFINE_integer('num_epochs', 10000, 'number of epochs')
 flags.DEFINE_integer('train_batch_size', 1024, 'Train Batch size.') 
 flags.DEFINE_integer('validation_batch_size', 1024, 'Validation Batch size.')  
 flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.')
@@ -38,7 +39,7 @@ flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.')
 #flags.DEFINE_string('train_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/train.csv", 'Path to the csv recording all training samples')
 #flags.DEFINE_string('test_data_dir', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
 #flags.DEFINE_string('test_csv_path', "/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m/test.csv", 'Path to the csv recording all test samples')
-#flags.DEFINE_string('summaries_dir', "./models/MV_9k_efficient_b5_Avgpool_MUSICNN_penultimate_Structure_Nonlinear_single_loss_margin_0.5_emb_512_epochs_101_GlobalAvg", 'Directory to put the summary and log data.')
+#flags.DEFINE_string('summaries_dir', "./models/VMNET", 'Directory to put the summary and log data.')
 
 # longleaf
 flags.DEFINE_string('train_data_dir', "/proj/mcavoy_lab/Youtube8m/", 'Directory to contain audio and rgb for training samples.')
@@ -94,7 +95,7 @@ train_feats, _ = FeatLoader(FLAGS.train_csv_path, FLAGS.train_data_dir, FLAGS.tr
 
 num_batchs = int(train_feats[0].get_shape()[0].value/FLAGS.train_batch_size)
 max_steps = num_batchs * FLAGS.num_epochs
-max_steps = 10
+
 print('Number of epochs {} and number of steps {} to train '.format(FLAGS.num_epochs, max_steps))
 
 x_train_batch, y_train_batch, aff_train_xy = GetBatch(train_feats, FLAGS.num_epochs, FLAGS.train_batch_size, shuffle = False)
@@ -136,8 +137,7 @@ with tf.Session(config=config) as sess:
     max_step_acc_yx = [0, -5e3]
 
     try:
-        print(max_steps)
-        for i in range(step, max_steps):
+        for i in tqdm.tqdm(range(step, max_steps)):
             print(i)
             p = float(i) / max_steps
             lamb = 0

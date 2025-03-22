@@ -65,5 +65,6 @@ Modify the following flags in `train.py`:
 ## 3. Notebooks  
 This folder contains various Jupyter notebooks:  
 
-- **`SegmentingDemo.ipynb`** - Playground for experimenting with different segmentation strategies.  
+- **`SegmentingDemo.ipynb`** - Playground for experimenting with different segmentation strategies.  This shows some of the files generated in the report 
 - **`Transformer.ipynb`** - Notebook implementation of the full proposed model.  
+- **`DataLoader.ipynb`** - Notebook implementation the data loader class to be used in the final script.  

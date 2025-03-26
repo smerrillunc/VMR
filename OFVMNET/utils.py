@@ -1,36 +1,9 @@
 import numpy as np
-import pandas as pd
-import os
-
-import tensorflow as tf
-import numpy as np
-from IPython.display import YouTubeVideo
-
-import requests
-import json
-
-import re
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import math
-
-from scipy.signal import peak_prominences
-from scipy.signal import find_peaks
-
 import matplotlib.pyplot as plt
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-from torch.nn.utils.rnn import pad_sequence
-import itertools
-import random
-
-import argparse
 from OFProcessor import OpticalFlowProcessor
 from DataLoader import VideoAudioDataset
-
-
+from torch.utils.data import DataLoader, Dataset
 
 def collate_fn(batch, processor):
     video_batch, audio_batch = zip(*batch)
@@ -45,8 +18,10 @@ def get_dataloader(path, batch_size=32, shuffle=True, method='video', window_siz
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=lambda batch: collate_fn(batch, processor))
 
 def perform_feature_padding(video_features, audio_features, start_segment, end_segment, max_seq_len):
-    vf = torch.tensor(video_features[start_segment:end_segment,:])
-    af = torch.tensor(audio_features[start_segment:end_segment,:])
+    vf = video_features.clone().detach()
+    af = audio_features.clone().detach()
+    vf =vf[start_segment:end_segment,:]
+    af = af[start_segment:end_segment,:]
 
     pvf = torch.zeros(max_seq_len, 1024)
     pvf[:vf.shape[0], :] = vf
@@ -100,6 +75,7 @@ def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max
     for i in range(len(video_batch)):
         vid = video_batch[i]
         aud = audio_batch[i]
+
         vid_sgmt_emb, aud_sgmt_emb = get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len)
         batch_vid_embeddings.extend(vid_sgmt_emb)
         batch_aud_embeddings.extend(aud_sgmt_emb)
@@ -116,16 +92,14 @@ def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max
     return batch_aud_embeddings, batch_vid_embeddings
 
 
-# In[200]:
-
 
 def get_intermodal_loss(batch_vid_embeddings, batch_aud_embeddings, k=5, min_val=0):
     # batch_vid_embeddings and  batch_aud_embeddings should already be normalized so 
     # multiplying them is a similarity metric
-    
+
     # convert simliarity to distance by (-1) >> high value indicates the distance between the samples is long
     dist_xy = (-1) *torch.matmul(batch_vid_embeddings, batch_aud_embeddings.T)
-    
+
     positive_pairs = torch.diag(dist_xy)
 
     # Get non-diagonal elements (negative examples)
@@ -134,11 +108,18 @@ def get_intermodal_loss(batch_vid_embeddings, batch_aud_embeddings, k=5, min_val
 
     # Apply the mask to extract non-diagonal elements
     negative_pairs = dist_xy[mask]
-    
-    topk_pos_values, _ = torch.topk(positive_pairs.flatten(), k)
-    topk_neg_values, _ = torch.topk(negative_pairs.flatten(), k)
-    
-    # max accross each pos/neg pair
-    loss = torch.max(topk_pos_values - topk_neg_values, torch.tensor(min_val))
-    return torch.mean(loss)
 
+    # First we find the positive pairs that are furthest in embedding space
+    topk_pos_values, _ = torch.topk(positive_pairs.flatten(), k, largest=True)
+
+    # next we find the negative pairs that are closest in embedding space
+    topk_neg_values, _ = torch.topk(negative_pairs.flatten(), k, largest=False)
+
+    # expand so we compare all possible combinations of pos/neg pairs
+    topk_pos_values_expanded = topk_pos_values.unsqueeze(1)  # Shape: (k, 1)
+    topk_neg_values_expanded = topk_neg_values.unsqueeze(0)  # Shape: (1, k)
+
+    # min_val or this loss
+    loss = torch.maximum(torch.tensor(min_val), topk_pos_values_expanded - topk_neg_values_expanded)
+    loss = loss.mean()
+    return loss

@@ -1,35 +1,19 @@
-import numpy as np
-import pandas as pd
 import os
-
-import tensorflow as tf
 import numpy as np
-from IPython.display import YouTubeVideo
-
-import requests
-import json
-
-import re
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import math
 
-from scipy.signal import peak_prominences
-from scipy.signal import find_peaks
-
-import matplotlib.pyplot as plt
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-from torch.nn.utils.rnn import pad_sequence
+
 import itertools
 import random
 
 import argparse
+import tqdm
+
 import utils
 from models import Transformer
-import tqdm
+
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
@@ -60,11 +44,19 @@ if __name__ == '__main__':
     parser.add_argument("-ws", "--window_size", type=int, default=20, help='OF moving average windo size')
 
     # Admin params
-    parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')
-    parser.add_argument("-dp", "--data_path", type=str, default='/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m', help='save path')
+
+    # Longleaf
+    #parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')
+    #parser.add_argument("-dp", "--data_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='dataset path')
+
+    # Local
+    parser.add_argument("-sp", "--save_path", type=str, default='/Users/scottmerrill/Documents/UNC/MultiModal/VMR/checkpoints', help='save path')
+    parser.add_argument("-dp", "--data_path", type=str, default='/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m', help='dataset path')
 
     args = vars(parser.parse_args())
 
+    # make checkpoint dir
+    os.makedirs(args['save_path'], exist_ok=True)
     audio_model = Transformer(input_dim=args['input_dim_audio'], embed_dim=args['embed_dim'], \
                              num_heads=args['num_heads'], num_layers=args['num_layers'], max_seq_len=args['max_seq_len'])
 
@@ -137,5 +129,10 @@ if __name__ == '__main__':
                 # adding a wrapper just in case
                 print(e)
             break
+
+        if epoch % 10 == 0:
+            print("HER")
+            utils.save_checkpoint(audio_model, audio_optimizer, epoch, args['save_path'] + f'/audio_{epoch}.pth')
+            utils.save_checkpoint(video_model, video_optimizer, epoch, args['save_path'] + f'/video_{epoch}.pth')
         break
 

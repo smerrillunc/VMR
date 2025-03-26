@@ -1,40 +1,16 @@
 import numpy as np
-import pandas as pd
-import os
-
-import tensorflow as tf
-import numpy as np
-from IPython.display import YouTubeVideo
-
-import requests
-import json
-
-import re
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
-from scipy.signal import peak_prominences
-from scipy.signal import find_peaks
-
-import matplotlib.pyplot as plt
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-from torch.nn.utils.rnn import pad_sequence
-import itertools
-import random
-
-import argparse
-
 
 class Transformer(nn.Module):
     def __init__(self, input_dim=1024, embed_dim=512, num_heads=8, num_layers=2, max_seq_len=50):
         super().__init__()
         self.input_proj = nn.Linear(input_dim, embed_dim)  # Project input to embedding dim
         self.pos_encoder = self._generate_sinusoidal_positional_encoding(max_seq_len, embed_dim)
-        self.transformer = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads), num_layers=num_layers)
+        # can't batch first because we require a mask
+        self.transformer = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads, batch_first=False), num_layers=num_layers)
         self.output_proj = nn.Linear(embed_dim, embed_dim)  # Project to final embedding
 
     def _generate_sinusoidal_positional_encoding(self, max_len, embed_dim):

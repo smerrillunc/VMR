@@ -26,15 +26,15 @@ from torch.nn.utils.rnn import pad_sequence
 import itertools
 import random
 
-import argparse
+import ruptures as rpt
 
 
 
 class OpticalFlowProcessor:
-    def __init__(self, method='video', window_size=20, max_segments=10, min_frames=10):
+    def __init__(self, method='video', window_size=10, min_segments=5, min_frames=10):
         self.method = method
         self.window_size = window_size
-        self.max_segments = max_segments
+        self.min_segments = min_segments
         self.min_frames = min_frames
 
     def get_of_ranks(self, rgb, audio):
@@ -65,13 +65,32 @@ class OpticalFlowProcessor:
     def _moving_average(arr, window_size=5):
         return np.convolve(arr, np.ones(window_size) / window_size, mode='valid')
 
-    def _optical_flow_segments(self, optical_flow):
+    def _optical_flow_segments_old(self, optical_flow):
         peaks, _ = find_peaks(optical_flow)
         prominences = peak_prominences(optical_flow, peaks)[0]
         peak_index = peaks[np.argsort(prominences)[-self.max_segments:]]
         peak_index = self._merge_intervals(np.sort(peak_index))
         return np.insert(np.append(peak_index, len(optical_flow)), 0, 0)
 
+    def _optical_flow_segments(self, optical_flow_video, max_seq_len=100):
+    
+        min_segments = self.min_segments
+        
+        while True:
+            algo = rpt.Dynp(model='l2', min_size=10, jump=3).fit(optical_flow_video)
+            change_points = algo.predict(n_bkps=min_segments)  # The 'pen' parameter controls sensitivity
+            differences = [change_points[i+1] - change_points[i] for i in range(len(change_points)-1)]
+
+            if max(differences) < max_seq_len:
+                break
+            else:
+                min_segments += 1
+
+        # insert zero for start segment
+        change_points.insert(0,0)
+        return change_points
+
+    
     def _merge_intervals(self, arr):
         merged = [arr[0]]
         for i in range(1, len(arr)):
@@ -95,4 +114,3 @@ class OpticalFlowProcessor:
         top_start, top_end = segments[np.where(ranks == 1)[0][0]], segments[np.where(ranks == 1)[0][0] + 1]
         bottom_start, bottom_end = segments[np.where(ranks == max(ranks))[0][0]], segments[np.where(ranks == max(ranks))[0][0] + 1]
         return (top_start, top_end), (bottom_start, bottom_end)
-

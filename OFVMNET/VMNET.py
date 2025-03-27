@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,7 +15,6 @@ import tqdm
 import utils
 from models import Transformer
 
-
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
 
@@ -29,6 +29,10 @@ if __name__ == '__main__':
     parser.add_argument("-idv", "--input_dim_video", type=int, default=1024, help='Video input dimension')
     parser.add_argument("-ed", "--embed_dim", type=int, default=256, help='Embedding dimension')
 
+    # segmentation params
+    parser.add_argument("-mf", "--min_frames", type=int, default=5, help='Minimum Frames in each Segment')
+    parser.add_argument("-sg", "--segments", type=int, default=20, help='Number of segments to create in the video')
+
     # Loss Params
     parser.add_argument("-l1", "--lambda1", type=float, default=0.33, help='Inter-modal loss weight')
     parser.add_argument("-l2", "--lambda2", type=float, default=0.33, help='OF Top matching loss weight')
@@ -37,7 +41,8 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--margin", type=float, default=0.1, help='Margin parameter for OF triplet loss')
 
     # Learning Params
-    parser.add_argument("-bs", "--batch_size", type=int, default=10, help='Batch Size')
+    parser.add_argument("-bs", "--batch_size", type=int, default=10, help='Train Batch Size')
+    parser.add_argument("-tbs", "--test_batch_size", type=int, default=10, help='Test Batch Size')
     parser.add_argument("-e", "--epochs", type=int, default=1000, help='Epochs')
     parser.add_argument("-k", "--top_k", type=int, default=10, help='Top k violating examples')
     parser.add_argument("-fk", "--flow_k", type=int, default=10, help='Mine this many top and bottom flow examples')
@@ -69,9 +74,14 @@ if __name__ == '__main__':
     # Define the Adam optimizer for the video model
     video_optimizer = optim.Adam(video_model.parameters(), lr=args['learning_rate'])
 
-    dataloader = utils.get_dataloader(args['data_path'], batch_size=args['batch_size'], shuffle=True, method='video', window_size=args['window_size'])
+
+    train_filenames = pd.read_csv(args['data_path']+'/train.csv')['filename'].values
+    test_filenames = pd.read_csv(args['data_path']+'/test.csv')['filename'].values
+
+    dataloader = utils.get_dataloader(args['data_path'], train_filenames, batch_size=args['batch_size'], shuffle=True, method='video', window_size=args['window_size'])
     triplet_loss = nn.TripletMarginLoss(margin=args['margin'])
 
+    df = pd.DataFrame()
 
     # Batch iterator
     for epoch in tqdm.tqdm(range(args['epochs'])):
@@ -82,7 +92,7 @@ if __name__ == '__main__':
 
                 # create segments for each batch and compute embeddings for the segments
                 # stack all the embeddings into single tensors
-                batch_aud_embeddings, batch_vid_embeddings = utils.get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, args['max_seq_len'])
+                batch_aud_embeddings, batch_vid_embeddings = utils.get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, args['max_seq_len'], args['window_size'], args['segments'], args['min_frames'])
 
                 
                 # 1. Inter-modal loss
@@ -90,7 +100,6 @@ if __name__ == '__main__':
 
 
                 # 2. optical flow loss
-
                 # this code finds the top and bottom ranked optical flow for a particular
                 # video.  This is specified in flow ranks.  It then converts these indexes to 
                 # their corresponding position in the stacked embeddings
@@ -124,15 +133,22 @@ if __name__ == '__main__':
                 loss.backward()
                 audio_optimizer.step()
                 video_optimizer.step()
-                print('success')
+
             except Exception as e:
                 # adding a wrapper just in case
                 print(e)
-            break
 
         if epoch % 10 == 0:
-            print("HER")
+            audio_model.eval()
+            video_model.eval()
             utils.save_checkpoint(audio_model, audio_optimizer, epoch, args['save_path'] + f'/audio_{epoch}.pth')
             utils.save_checkpoint(video_model, video_optimizer, epoch, args['save_path'] + f'/video_{epoch}.pth')
-        break
+            print(f'Train Loss {loss}')
 
+            # path here is path to test set data
+            tmp = utils.compute_evaluations(video_model, audio_model, args['test_batch_size'], args['max_seq_len'], args['window_size'],\
+                                            args['segments'],args['min_frames'], args['data_path'], test_filenames ,epoch, ks=[1, 5])
+            df = pd.concat([df, tmp])
+            df.to_csv(args['save_path'] + f'/eval.csv', index=False)
+            audio_model.train()
+            video_model.train()

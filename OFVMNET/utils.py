@@ -1,9 +1,11 @@
+import pandas as pd
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from OFProcessor import OpticalFlowProcessor
 from DataLoader import VideoAudioDataset
 from torch.utils.data import DataLoader, Dataset
+from eval import Eval
 
 def collate_fn(batch, processor):
     video_batch, audio_batch = zip(*batch)
@@ -12,10 +14,12 @@ def collate_fn(batch, processor):
     flow_ranks = [processor.get_of_ranks(video_batch[i], audio_batch[i]) for i in range(len(video_batch))]
     return video_batch, audio_batch, flow_ranks
 
-def get_dataloader(path, batch_size=32, shuffle=True, method='video', window_size=20):
-    dataset = VideoAudioDataset(path)
+
+def get_dataloader(path, filenames, batch_size=32, shuffle=True, method='video', window_size=20):
+    dataset = VideoAudioDataset(path, filenames)
     processor = OpticalFlowProcessor(method=method, window_size=window_size)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=lambda batch: collate_fn(batch, processor))
+
 
 def perform_feature_padding(video_features, audio_features, start_segment, end_segment, max_seq_len):
     vf = video_features.clone().detach()
@@ -46,11 +50,10 @@ def save_checkpoint(model, optimizer, epoch, filename):
     print(f"Checkpoint saved at epoch {epoch} to {filename}")
 
 
-def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len):
+def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, window_size, segments, min_frames):
     vid_segment_embeddings = []
     
-
-    of = OpticalFlowProcessor()
+    of = OpticalFlowProcessor(method='video', window_size=window_size, segments=segments, min_frames=min_frames)
     flow = of._compute_flow(vid, aud)
     segments = of._optical_flow_segments(flow)
 
@@ -68,7 +71,7 @@ def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len):
 
 
 
-def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max_seq_len):
+def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max_seq_len, window_size, segments, min_frames):
     # We precompute the segment embeddings in each batch.  We do this once and then proceed to processing batch
     batch_vid_embeddings = []
     batch_aud_embeddings = []
@@ -76,7 +79,7 @@ def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max
         vid = video_batch[i]
         aud = audio_batch[i]
 
-        vid_sgmt_emb, aud_sgmt_emb = get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len)
+        vid_sgmt_emb, aud_sgmt_emb = get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, window_size, segments, min_frames)
         batch_vid_embeddings.extend(vid_sgmt_emb)
         batch_aud_embeddings.extend(aud_sgmt_emb)
         
@@ -123,3 +126,58 @@ def get_intermodal_loss(batch_vid_embeddings, batch_aud_embeddings, k=5, min_val
     loss = torch.maximum(torch.tensor(min_val), topk_pos_values_expanded - topk_neg_values_expanded)
     loss = loss.mean()
     return loss
+
+def compute_evaluations(video_model, audio_model, batch_size, max_seq_len, window_size, \
+                        segments, min_frames, path, filenames, epoch, ks=[1, 5]):
+
+    metrics = Eval()
+    testloader = get_dataloader(path, filenames, batch_size=batch_size, shuffle=True, method='video', window_size=window_size)
+    audio_model.eval()
+    video_model.eval()
+
+    recalls = []
+    fads = []
+    av_aligns = []
+
+    
+    for video_batch, audio_batch, flow_ranks in testloader:
+        batch_aud_embeddings, batch_vid_embeddings = get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max_seq_len, window_size, segments, min_frames)
+
+        # These were in (#segments*batchsize, 256)
+        # Now they are in (batchsize, 256 * #segments)
+        batch_vid_embeddings = batch_vid_embeddings.reshape(batch_size, -1)
+        batch_aud_embeddings = batch_aud_embeddings.reshape(batch_size, -1)
+
+        # we are going to do a naive cosine similarity based retrieval strategy
+        similarity_matrix = torch.matmul(batch_vid_embeddings, batch_aud_embeddings.T)
+
+        # Get the most similar audio embeddings for each video
+        _, most_similar_indices = torch.max(similarity_matrix, dim=1)
+
+        # recall@k
+        recall = [metrics.top_k_recall(similarity_matrix, k) for k in ks]
+
+        retrieved_audio_embeddings = batch_aud_embeddings[most_similar_indices]
+        fad = metrics.calculate_frechet_audio_distance(batch_aud_embeddings, retrieved_audio_embeddings)
+        av_align = metrics.compute_av_align_score(batch_vid_embeddings, retrieved_audio_embeddings, prominence_threshold=0.1)
+
+
+        recalls.append(recall)
+        fads.append(fad)
+        av_aligns.append(av_align)
+        break
+    mean_recalls = np.mean(recalls, axis=0)
+    print(f'Mean Recall@{ks}: {mean_recalls}')
+    print(f'Mean AV-Align: {np.mean(av_aligns)}')
+    print(f'Mean AV-Align: {np.mean(fads)}')
+    
+    tmp = pd.DataFrame({'epoch':epoch,
+       'fad':np.mean(av_aligns),
+       'av_align':np.mean(fads)
+      }, index=[0])
+
+    mean_recalls = np.mean(recalls, axis=0)
+    for i, k in enumerate(ks):
+        tmp[f'recall@{k}'] = mean_recalls[i]
+        
+    return tmp

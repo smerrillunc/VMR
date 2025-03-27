@@ -5,9 +5,9 @@ from torch.utils.data import DataLoader, Dataset
 
 
 class VideoAudioDataset(Dataset):
-    def __init__(self, path):
+    def __init__(self, path, filenames):
         self.path = path
-        self.filenames = os.listdir(os.path.join(path, 'video'))
+        self.filenames = filenames
     
     def __len__(self):
         return len(self.filenames)
@@ -16,6 +16,6 @@ class VideoAudioDataset(Dataset):
         filename = self.filenames[idx]
         video_data = np.load(os.path.join(self.path, 'video', filename))
         audio_data = np.load(os.path.join(self.path, 'audio', filename))
-        video_data = video_data[:, :1024]
+        video_data = video_data[:, :1024] # fix this for final run
         return video_data, audio_data
 

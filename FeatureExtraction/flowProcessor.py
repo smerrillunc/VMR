@@ -107,12 +107,13 @@ if __name__ == '__main__':
       content = file.read()  # Read the entire content of the file
   video_paths = content.split('\n')
 
-  processor = OpticalFlowProcessor(target_fps=args['target_fps'],
+  df = pd.DataFrame()
+  for video_path in tqdm.tqdm(video_paths):
+      
+      processor = OpticalFlowProcessor(target_fps=args['target_fps'],
                                    min_frames=args['min_frames'], 
                                    num_segments=args['num_segments'])
 
-  df = pd.DataFrame()
-  for video_path in tqdm.tqdm(video_paths):
       try:
         tmp = {}
 
@@ -121,7 +122,7 @@ if __name__ == '__main__':
 
         if vid in processed_vids:
           print(f"VID: {vid} already processed, skipping")
-          continue
+          #continue
         else:
           print(f"Processing VID: {vid}")
 
@@ -136,6 +137,10 @@ if __name__ == '__main__':
         
         # save the flow ranks
         tmp = {'vid':vid,
+                'ranks':ranks,
+                # divide by fps since we'll be sampling OF at this FPS but we still want per second segments because
+                # this is what our audio and vidoes are sampled at
+                'segments':[x//processor.target_fps for x in change_points],
                 'top_start':best_flow[0],
                 'top_end':best_flow[1],
                 'bottom_start':worst_flow[0],

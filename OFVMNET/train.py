@@ -14,6 +14,8 @@ import tqdm
 
 import utils
 from models import Transformer
+from DataLoader import VideoAudioDataset
+from torch.utils.data import DataLoader, Dataset
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
@@ -26,7 +28,7 @@ if __name__ == '__main__':
     parser.add_argument("-nl", "--num_layers", type=int, default=1, help='Number of Layers for Transformer Encoders')
 
     parser.add_argument("-ida", "--input_dim_audio", type=int, default=128, help='Audio input dimension')
-    parser.add_argument("-idv", "--input_dim_video", type=int, default=1024, help='Video input dimension')
+    parser.add_argument("-idv", "--input_dim_video", type=int, default=2048, help='Video input dimension')
     parser.add_argument("-ed", "--embed_dim", type=int, default=32, help='Embedding dimension')
 
     # segmentation params
@@ -45,7 +47,6 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--epochs", type=int, default=1000, help='Epochs')
     parser.add_argument("-k", "--top_k", type=int, default=10, help='Top k violating examples')
     parser.add_argument("-fk", "--flow_k", type=int, default=10, help='Mine this many top and bottom flow examples')
-    parser.add_argument("-ws", "--window_size", type=int, default=20, help='OF moving average windo size')
 
     # Longleaf
     parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')
@@ -74,7 +75,7 @@ if __name__ == '__main__':
 
     meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], args['flow_ranks_file'])
     dataset = VideoAudioDataset(meta_df)
-    dataloader = DataLoader(dataset, batch_size=args['batch_size'], shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=args['batch_size'], shuffle=True, collate_fn=utils.custom_collate)
 
     #train_filenames = pd.read_csv(args['data_path']+'/train.csv')['filename'].values
     #test_filenames = pd.read_csv(args['data_path']+'/test.csv')['filename'].values
@@ -89,14 +90,15 @@ if __name__ == '__main__':
     # Batch iterator
     for epoch in tqdm.tqdm(range(args['epochs'])):
         print(f"Starting Epoch {epoch}")
-        for idx, (video_batch, audio_batch, flow_ranks) in enumerate(dataloader):
+        for idx, (video_batch, audio_batch, segments, flow_ranks) in enumerate(dataloader):
             try:
+
                 audio_optimizer.zero_grad()
                 video_optimizer.zero_grad()
 
                 # create segments for each batch and compute embeddings for the segments
                 # stack all the embeddings into single tensors
-                batch_aud_embeddings, batch_vid_embeddings = utils.get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, args['max_seq_len'], args['window_size'], args['segments'], args['min_frames'])
+                batch_aud_embeddings, batch_vid_embeddings = utils.get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, args['max_seq_len'], segments)
 
                 
                 # 1. Inter-modal loss

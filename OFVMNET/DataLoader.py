@@ -16,6 +16,7 @@ class VideoAudioDataset(Dataset):
 
         video_data = np.load(row['vid_filename'])
         audio_data = np.load(row['aud_filename'])
+        segments = eval(row['segments'])
         flow_ranks = row['ranks']
 
-        return video_data, audio_data, flow_ranks
+        return video_data, audio_data, segments, flow_ranks

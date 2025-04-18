@@ -2,36 +2,53 @@ import pandas as pd
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from OFProcessor import OpticalFlowProcessor
-from DataLoader import VideoAudioDataset
-from torch.utils.data import DataLoader, Dataset
 from eval import Eval
+import os
 
-def collate_fn(batch, processor):
-    video_batch, audio_batch = zip(*batch)
-    video_batch = [torch.tensor(v, dtype=torch.float32) for v in video_batch]
-    audio_batch = [torch.tensor(a, dtype=torch.float32) for a in audio_batch]
-    flow_ranks = [processor.get_of_ranks(video_batch[i], audio_batch[i]) for i in range(len(video_batch))]
-    return video_batch, audio_batch, flow_ranks
+def get_meta_df(video_feature_path, audio_feature_path, flow_rank_file):
+    def parse_ranks_str(ranks_str):
+        # Remove tuple and quotes, then extract numbers
+        cleaned = ranks_str.strip("(),'")  # removes parentheses, commas, quotes
+        return list(map(int, cleaned.strip('[]').split()))
 
+    video_files = os.listdir(video_feature_path)
+    audio_files = os.listdir(audio_feature_path)
 
-def get_dataloader(path, filenames, batch_size=32, shuffle=True, method='video', window_size=20):
-    dataset = VideoAudioDataset(path, filenames)
-    processor = OpticalFlowProcessor(method=method, window_size=window_size)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=lambda batch: collate_fn(batch, processor))
+    video_file_map = {filename.split('.')[0]: os.path.join(video_feature_path, filename) for filename in video_files }
+    audio_file_map = {filename.split('.')[0]: os.path.join(audio_feature_path, filename) for filename in audio_files}
+    
+    flow_ranks = pd.read_csv(flow_rank_file)
+    flow_ranks_dict = dict(zip(flow_ranks['vid'], flow_ranks['ranks']))
+    
+    vid_df = pd.DataFrame(list(video_file_map.items()), columns=['vid', 'vid_filename'])
+    aud_df = pd.DataFrame(list(audio_file_map.items()), columns=['vid', 'aud_filename'])
+    flow_ranks = pd.read_csv(flow_rank_file)[['vid', 'ranks', 'segments']]
+
+    df = vid_df.merge(aud_df, on='vid').merge(flow_ranks, on='vid')
+
+    df['ranks'] = df['ranks'].apply(
+        lambda x: parse_ranks_str(x) if isinstance(x, str) else list(map(int, x)))
+
+    return df
+
+def custom_collate(batch):
+    videos, audios, segments, ranks = zip(*batch)
+    # Return as lists so you can deal with variable shapes manually
+    return list(videos), list(audios), list(segments), list(ranks)
 
 
 def perform_feature_padding(video_features, audio_features, start_segment, end_segment, max_seq_len):
-    vf = video_features.clone().detach()
-    af = audio_features.clone().detach()
-    vf =vf[start_segment:end_segment,:]
-    af = af[start_segment:end_segment,:]
+    #vf = video_features.clone().detach()
+    #af = audio_features.clone().detach()
 
-    pvf = torch.zeros(max_seq_len, 1024)
-    pvf[:vf.shape[0], :] = vf
+    vf =video_features[start_segment:end_segment,:]
+    af = audio_features[start_segment:end_segment,:]
 
-    paf = torch.zeros(max_seq_len, 128)
-    paf[:af.shape[0], :] = af
+    pvf = torch.zeros(max_seq_len, vf.shape[1])
+    pvf[:vf.shape[0], :] = torch.tensor(vf)
+
+    paf = torch.zeros(max_seq_len, af.shape[1])
+    paf[:af.shape[0], :] = torch.tensor(af)
 
     # Create mask (True for padding positions)
     mask = torch.arange(max_seq_len) >= vf.shape[0]
@@ -50,12 +67,7 @@ def save_checkpoint(model, optimizer, epoch, filename):
     print(f"Checkpoint saved at epoch {epoch} to {filename}")
 
 
-def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, window_size, segments, min_frames):
-    vid_segment_embeddings = []
-    
-    of = OpticalFlowProcessor(method='video', window_size=window_size, segments=segments, min_frames=min_frames)
-    flow = of._compute_flow(vid, aud)
-    segments = of._optical_flow_segments(flow)
+def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, segments):
 
     vid_segment_embeddings = []
     aud_segment_embeddings = []
@@ -71,7 +83,7 @@ def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, win
 
 
 
-def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max_seq_len, window_size, segments, min_frames):
+def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max_seq_len, segments):
     # We precompute the segment embeddings in each batch.  We do this once and then proceed to processing batch
     batch_vid_embeddings = []
     batch_aud_embeddings = []
@@ -79,7 +91,7 @@ def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max
         vid = video_batch[i]
         aud = audio_batch[i]
 
-        vid_sgmt_emb, aud_sgmt_emb = get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, window_size, segments, min_frames)
+        vid_sgmt_emb, aud_sgmt_emb = get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, segments[i])
         batch_vid_embeddings.extend(vid_sgmt_emb)
         batch_aud_embeddings.extend(aud_sgmt_emb)
         
@@ -128,7 +140,7 @@ def get_intermodal_loss(batch_vid_embeddings, batch_aud_embeddings, k=5, min_val
     return loss
 
 def compute_evaluations(video_model, audio_model, batch_size, max_seq_len, window_size, \
-                        segments, min_frames, path, filenames, epoch, ks=[1, 5]):
+                        segments, min_frames, path, filenames, epoch, ks=[1, 2]):
 
     metrics = Eval()
     testloader = get_dataloader(path, filenames, batch_size=batch_size, shuffle=True, method='video', window_size=window_size)
@@ -165,11 +177,12 @@ def compute_evaluations(video_model, audio_model, batch_size, max_seq_len, windo
         recalls.append(recall)
         fads.append(fad)
         av_aligns.append(av_align)
-        break
+        
+
     mean_recalls = np.mean(recalls, axis=0)
     print(f'Mean Recall@{ks}: {mean_recalls}')
     print(f'Mean AV-Align: {np.mean(av_aligns)}')
-    print(f'Mean AV-Align: {np.mean(fads)}')
+    print(f'Mean FAD: {np.mean(fads)}')
     
     tmp = pd.DataFrame({'epoch':epoch,
        'fad':np.mean(av_aligns),

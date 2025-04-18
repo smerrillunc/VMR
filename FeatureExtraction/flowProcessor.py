@@ -4,6 +4,7 @@ import numpy as np
 import tqdm
 
 import cv2
+import ruptures as rpt
 import torchaudio
 
 import os
@@ -39,7 +40,7 @@ class OpticalFlowProcessor:
             idx += 1
 
         cap.release()
-        return frames, target_fps
+        return frames
 
     def get_of_ranks(self, flow_trajectory, segments):
         segment_means = self.compute_segment_means(segments, flow_trajectory)
@@ -52,7 +53,7 @@ class OpticalFlowProcessor:
         return (top_start/self.target_fps, top_end/self.target_fps), (bottom_start/self.target_fps, bottom_end/self.target_fps)
     
     def get_flow_trajectory(self, frames):
-        flow_trajectory = [compute_of(frames[0], frames[1])] + [compute_of(frames[i - 1], frames[i]) for i in range(1, len(frames))]
+        flow_trajectory = [self.compute_of(frames[0], frames[1])] + [self.compute_of(frames[i - 1], frames[i]) for i in range(1, len(frames))]
         return np.array(flow_trajectory)
         
     def get_optical_flow_segments(self, flow_trajectory):    
@@ -91,7 +92,7 @@ if __name__ == '__main__':
   parser.add_argument("-mf", "--min_frames", type=int, default=10, help='Minimum number of 1-second frames to include for segments')
   parser.add_argument("-ns", "--num_segments", type=int, default=10, help='Number of Segments to create')
 
-  parser.add_argument("-vf", "--video_file_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/video_files.txt', help='Path to video file')
+  parser.add_argument("-vf", "--video_file_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/video_paths.txt', help='Path to video file')
   parser.add_argument("-sp", "--save_path", type=str, default='/work/users/s/m/smerrill/Youtube8m', help='Save Path')
   
   args = vars(parser.parse_args())
@@ -104,15 +105,19 @@ if __name__ == '__main__':
   # Here are the youtube ids used by original VM-NET
   with open(args['video_file_path'], 'r') as file:
       content = file.read()  # Read the entire content of the file
-  video_files = content.split('\n')
+  video_paths = content.split('\n')
+
+  processor = OpticalFlowProcessor(target_fps=args['target_fps'],
+                                   min_frames=args['min_frames'], 
+                                   num_segments=args['num_segments'])
 
   df = pd.DataFrame()
-  for video_file in tqdm.tqdm(video_files):
+  for video_path in tqdm.tqdm(video_paths):
       try:
         tmp = {}
 
         # video id      
-        vid = video_file.split('/')[-1].split('.')[0]
+        vid = video_path.split('/')[-1].split('.')[0]
 
         if vid in processed_vids:
           print(f"VID: {vid} already processed, skipping")
@@ -120,28 +125,23 @@ if __name__ == '__main__':
         else:
           print(f"Processing VID: {vid}")
 
-        processor = OpticalFlowProcessor(target_fps=args['target_fps'],
-                                         min_frames=args['min_frames'], 
-                                         num_segments=args['num_segments'])
-
-        for video in video_paths:
-            frames, target_fps = processor.extract_sampled_frames(video_path)
-            flow_trajetory = processor.get_flow_trajectory(frames)
-            change_points = processor.get_optical_flow_segments(flow_trajetory)
-            ranks = processor.get_of_ranks(flow_trajetory, change_points)
-            best_flow, worst_flow = processor.get_best_worst_flow_times(change_points, ranks)
+        frames = processor.extract_sampled_frames(video_path)
+        flow_trajetory = processor.get_flow_trajectory(frames)
+        change_points = processor.get_optical_flow_segments(flow_trajetory)
+        ranks = processor.get_of_ranks(flow_trajetory, change_points)
+        best_flow, worst_flow = processor.get_best_worst_flow_times(change_points, ranks)
+    
+        # save the trajectories
+        np.save(os.path.join(args['save_path'], 'flow', vid + '.npy'), flow_trajetory)
         
-            # save the trajectories
-            np.save(os.path.join(args['save_path'], 'flow', vid + '.npy'), flow_trajetory)
-            
-            # save the flow ranks
-            tmp = {'vid':vid,
-                    'top_start':best_flow[0],
-                    'top_end':best_flow[1],
-                    'bottom_start':worst_flow[0],
-                    'bottom_end':worst_flow[1]}
-            df = pd.concat([df, pd.DataFrame([tmp])])
-            df.to_csv(args['save_path'], 'flow', 'ranks.csv')
+        # save the flow ranks
+        tmp = {'vid':vid,
+                'top_start':best_flow[0],
+                'top_end':best_flow[1],
+                'bottom_start':worst_flow[0],
+                'bottom_end':worst_flow[1]}
+        df = pd.concat([df, pd.DataFrame([tmp])])
+        df.to_csv(os.path.join(args['save_path'], 'flow', 'ranks.csv'))
 
       except Exception as e:
         print(e)

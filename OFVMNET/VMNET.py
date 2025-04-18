@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-ida", "--input_dim_audio", type=int, default=128, help='Audio input dimension')
     parser.add_argument("-idv", "--input_dim_video", type=int, default=1024, help='Video input dimension')
-    parser.add_argument("-ed", "--embed_dim", type=int, default=256, help='Embedding dimension')
+    parser.add_argument("-ed", "--embed_dim", type=int, default=32, help='Embedding dimension')
 
     # segmentation params
     parser.add_argument("-mf", "--min_frames", type=int, default=5, help='Minimum Frames in each Segment')
@@ -147,7 +147,7 @@ if __name__ == '__main__':
 
             # path here is path to test set data
             tmp = utils.compute_evaluations(video_model, audio_model, args['test_batch_size'], args['max_seq_len'], args['window_size'],\
-                                            args['segments'],args['min_frames'], args['data_path'], test_filenames ,epoch, ks=[1, 5])
+                                            args['segments'],args['min_frames'], args['data_path'], test_filenames ,epoch, ks=[1])
             df = pd.concat([df, tmp])
             df.to_csv(args['save_path'] + f'/eval.csv', index=False)
             audio_model.train()

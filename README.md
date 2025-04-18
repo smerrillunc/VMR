@@ -18,7 +18,7 @@ This folder includes several scripts to perform feature extraction as described 
 - `vggishProcessor.py` - This converts raw *.mp3, .mp4a and .webm files to the vggish features
 - `clip.sl`, `flow.sl`, `i3d.sl`, `resnet.sl` - These are slurm scripts which take *.mp4 files and convert to video features.  We utilize this [library]([https://github.com/csehong/VM-NET](https://v-iashin.github.io/video_features/)) and followed their instructions to setup an environment.
 - `HIMV200.txt` - List of YouTube URLs corresponding to the HIMV-200K.
-- `SymMV.csv` - List of YouTube URLs corresponding to the SymMV-200K.
+- `SymMV.txt` - List of YouTube URLs corresponding to the SymMV-200K.
 
 ---
 

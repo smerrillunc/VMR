@@ -6,17 +6,19 @@ This repository contains scripts and code for video-to-music retrieval, includin
 ---
 
 ## 1. Feature Extraction  
-This folder includes scripts to perform feature extraction as described in [this paper](https://arxiv.org/abs/1609.08675).  
+This folder includes several scripts to perform feature extraction as described in our paper
 
 ### **Feature Extraction Details**  
-- **Video Features**: Uses Inception-v3 and PCA whitening to extract a 1024-dimensional vector per second.  
+- **Video Features**: We use 3 different models.  Resnet, CLIP and I3D.  Resnet produces a 2048 vector/second of video.  CLIP produces a 512 length vector per second of video.  And i3d results in 1024 rgb feature vector and a 1024 rgb optical flow vector per second of video.
 - **Music Features**: Uses VGGish to convert audio into a 128-dimensional vector per second.  
 
 ### **Included Files**  
-- `FeatureExtraction.py` - Downloads videos using `yt_dlp`, converts audio to MP3, and extracts Inception and VGGish features.  
-- `pca_transform.ipynb` - Converts 2048-dimensional Inception features to PCA-whitened 1024-dimensional features.  
-- `Youtube_ID.txt` - List of YouTube URLs to download.  
-- `submit_feature_extraction.py` - Submits multiple SLURM jobs to collect data in parallel.  
+- `downloadYt.py` - Uses `yt_dlp`, and a proxy rotation strategy to download youtube videos
+- `flowProcessor.py` - This converts raw *.mp4 files to the flow based features described in our paper that are used for segmenting videos.
+- `vggishProcessor.py` - This converts raw *.mp3, .mp4a and .webm files to the vggish features
+- `clip.sl`, `flow.sl`, `i3d.sl`, `resnet.sl` - These are slurm scripts which take *.mp4 files and convert to video features.  We utilize this [library]([https://github.com/csehong/VM-NET](https://v-iashin.github.io/video_features/)) and followed their instructions to setup an environment.
+- `HIMV200.txt` - List of YouTube URLs corresponding to the HIMV-200K.
+- `SymMV.txt` - List of YouTube URLs corresponding to the SymMV-200K.
 
 ---
 

@@ -5,17 +5,17 @@ from torch.utils.data import DataLoader, Dataset
 
 
 class VideoAudioDataset(Dataset):
-    def __init__(self, path, filenames):
-        self.path = path
-        self.filenames = filenames
-    
+    def __init__(self, meta_df):
+        self.meta_df = meta_df.reset_index(drop=True)
+                
     def __len__(self):
-        return len(self.filenames)
+        return len(self.meta_df)
     
     def __getitem__(self, idx):
-        filename = self.filenames[idx]
-        video_data = np.load(os.path.join(self.path, 'video', filename))
-        audio_data = np.load(os.path.join(self.path, 'audio', filename))
-        video_data = video_data[:, :1024] # fix this for final run
-        return video_data, audio_data
+        row = self.meta_df.iloc[idx]
 
+        video_data = np.load(row['vid_filename'])
+        audio_data = np.load(row['aud_filename'])
+        flow_ranks = row['ranks']
+
+        return video_data, audio_data, flow_ranks

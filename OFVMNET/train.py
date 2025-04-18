@@ -42,22 +42,20 @@ if __name__ == '__main__':
 
     # Learning Params
     parser.add_argument("-bs", "--batch_size", type=int, default=10, help='Train Batch Size')
-    parser.add_argument("-tbs", "--test_batch_size", type=int, default=10, help='Test Batch Size')
     parser.add_argument("-e", "--epochs", type=int, default=1000, help='Epochs')
     parser.add_argument("-k", "--top_k", type=int, default=10, help='Top k violating examples')
     parser.add_argument("-fk", "--flow_k", type=int, default=10, help='Mine this many top and bottom flow examples')
     parser.add_argument("-ws", "--window_size", type=int, default=20, help='OF moving average windo size')
 
-    # Admin params
-
     # Longleaf
-    #parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')
-    #parser.add_argument("-dp", "--data_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='dataset path')
+    parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')
+    parser.add_argument("-dp", "--data_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='dataset path')
+    
+    parser.add_argument("-vfp", "--video_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/resnet/resnet101', help='Path to video Features File')
+    parser.add_argument("-afp", "--audio_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/vggish', help='Path to audio Features File')
+    parser.add_argument("-frf", "--flow_ranks_file", type=str, default='/work/users/s/m/smerrill/Youtube8m/flow/ranks.csv', help='Path to OF ranks file')
 
-    # Local
-    parser.add_argument("-sp", "--save_path", type=str, default='/Users/scottmerrill/Documents/UNC/MultiModal/VMR/checkpoints', help='save path')
-    parser.add_argument("-dp", "--data_path", type=str, default='/Users/scottmerrill/Documents/UNC/MultiModal/VMR/Youtube8m', help='dataset path')
-
+    
     args = vars(parser.parse_args())
 
     # make checkpoint dir
@@ -74,18 +72,24 @@ if __name__ == '__main__':
     # Define the Adam optimizer for the video model
     video_optimizer = optim.Adam(video_model.parameters(), lr=args['learning_rate'])
 
+    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], args['flow_ranks_file'])
+    dataset = VideoAudioDataset(meta_df)
+    dataloader = DataLoader(dataset, batch_size=args['batch_size'], shuffle=True)
 
-    train_filenames = pd.read_csv(args['data_path']+'/train.csv')['filename'].values
-    test_filenames = pd.read_csv(args['data_path']+'/test.csv')['filename'].values
+    #train_filenames = pd.read_csv(args['data_path']+'/train.csv')['filename'].values
+    #test_filenames = pd.read_csv(args['data_path']+'/test.csv')['filename'].values
+    #dataloader = utils.get_dataloader(args['data_path'], train_filenames, batch_size=args['batch_size'], shuffle=True, method='video', window_size=args['window_size'])
 
-    dataloader = utils.get_dataloader(args['data_path'], train_filenames, batch_size=args['batch_size'], shuffle=True, method='video', window_size=args['window_size'])
+
+
     triplet_loss = nn.TripletMarginLoss(margin=args['margin'])
 
     df = pd.DataFrame()
 
     # Batch iterator
     for epoch in tqdm.tqdm(range(args['epochs'])):
-        for video_batch, audio_batch, flow_ranks in dataloader:
+        print(f"Starting Epoch {epoch}")
+        for idx, (video_batch, audio_batch, flow_ranks) in enumerate(dataloader):
             try:
                 audio_optimizer.zero_grad()
                 video_optimizer.zero_grad()
@@ -133,22 +137,12 @@ if __name__ == '__main__':
                 loss.backward()
                 audio_optimizer.step()
                 video_optimizer.step()
+                print(f'Epoch {epoch}, Batch {idx}, Train Loss {loss}')
 
             except Exception as e:
                 # adding a wrapper just in case
-                print(e)
+                print(f"Epoch {epoch}, Batch {idx}, failed with Exception {e}")
 
         if epoch % 10 == 0:
-            audio_model.eval()
-            video_model.eval()
             utils.save_checkpoint(audio_model, audio_optimizer, epoch, args['save_path'] + f'/audio_{epoch}.pth')
             utils.save_checkpoint(video_model, video_optimizer, epoch, args['save_path'] + f'/video_{epoch}.pth')
-            print(f'Train Loss {loss}')
-
-            # path here is path to test set data
-            tmp = utils.compute_evaluations(video_model, audio_model, args['test_batch_size'], args['max_seq_len'], args['window_size'],\
-                                            args['segments'],args['min_frames'], args['data_path'], test_filenames ,epoch, ks=[1])
-            df = pd.concat([df, tmp])
-            df.to_csv(args['save_path'] + f'/eval.csv', index=False)
-            audio_model.train()
-            video_model.train()

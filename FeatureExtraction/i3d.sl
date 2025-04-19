@@ -1,12 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=clip_extraction
-#SBATCH --time=2-04:00:00             # Adjust based on expected runtime
-#SBATCH --partition=standard        # Adjust partition as needed
+#SBATCH --job-name=i3d_extraction
+#SBATCH --time=3-04:00:00             # Adjust based on expected runtime
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4           # Adjust based on your script's needs
-#SBATCH --mem=16G                   # Adjust based on memory needs
-#SBATCH --gres=gpu:1                # Request GPU if needed
+#SBATCH --mem=16G   
+#SBATCH -p a100-gpu
+#SBATCH --qos=gpu_access
+#SBATCH --gres=gpu:1
 #SBATCH --output=/work/users/s/m/smerrill/log/download_job_%A.out   # STDOUT file
 #SBATCH --error=/work/users/s/m/smerrill/log/download_job_%A.err    # STDERR file
 

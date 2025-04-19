@@ -1,4 +1,4 @@
-import os
+aimport os
 import pandas as pd
 import numpy as np
 import torch
@@ -49,9 +49,7 @@ if __name__ == '__main__':
     parser.add_argument("-fk", "--flow_k", type=int, default=10, help='Mine this many top and bottom flow examples')
 
     # Longleaf
-    parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')
-    parser.add_argument("-dp", "--data_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='dataset path')
-    
+    parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')    
     parser.add_argument("-vfp", "--video_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/resnet/resnet101', help='Path to video Features File')
     parser.add_argument("-afp", "--audio_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/vggish', help='Path to audio Features File')
     parser.add_argument("-frf", "--flow_ranks_file", type=str, default='/work/users/s/m/smerrill/Youtube8m/flow/ranks.csv', help='Path to OF ranks file')
@@ -76,12 +74,6 @@ if __name__ == '__main__':
     meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], args['flow_ranks_file'])
     dataset = VideoAudioDataset(meta_df)
     dataloader = DataLoader(dataset, batch_size=args['batch_size'], shuffle=True, collate_fn=utils.custom_collate)
-
-    #train_filenames = pd.read_csv(args['data_path']+'/train.csv')['filename'].values
-    #test_filenames = pd.read_csv(args['data_path']+'/test.csv')['filename'].values
-    #dataloader = utils.get_dataloader(args['data_path'], train_filenames, batch_size=args['batch_size'], shuffle=True, method='video', window_size=args['window_size'])
-
-
 
     triplet_loss = nn.TripletMarginLoss(margin=args['margin'])
 

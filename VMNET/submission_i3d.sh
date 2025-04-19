@@ -16,4 +16,10 @@
 module purge
 module load python/3.9.6
 source /proj/mcavoy_lab/VMNET/vmnet_env/bin/activate
-python train.py
+python train.py --video_dir /work/users/s/m/smerrill/Youtube8m/i3d \
+--audio_dir  /work/users/s/m/smerrill/Youtube8m/vggish \
+--train_csv_path /work/users/s/m/smerrill/Youtube8m/train.csv \
+--summaries_dir /proj/mcavoy_lab/Youtube8m/models/i3d \
+--vid_dim 2048 \
+--aud_dim 128
+

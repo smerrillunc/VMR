@@ -1,12 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=clip_extraction
-#SBATCH --time=04:00:00             # Adjust based on expected runtime
-#SBATCH --partition=standard        # Adjust partition as needed
+#SBATCH --time=3-12:00:00             # Adjust based on expected runtime
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4           # Adjust based on your script's needs
 #SBATCH --mem=16G                   # Adjust based on memory needs
-#SBATCH --gres=gpu:1                # Request GPU if needed
 #SBATCH --output=/work/users/s/m/smerrill/log/download_job_%A.out   # STDOUT file
 #SBATCH --error=/work/users/s/m/smerrill/log/download_job_%A.err    # STDERR file
 

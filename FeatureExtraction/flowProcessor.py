@@ -98,16 +98,22 @@ if __name__ == '__main__':
   args = vars(parser.parse_args())
 
   os.makedirs(os.path.join(args['save_path'], 'flow'), exist_ok=True)
+  flow_ranks_file = os.path.join(args['save_path'], 'flow', 'ranks.csv')
+  
 
-  processed_vids = os.listdir(os.path.join(args['save_path'], 'flow'))
-  processed_vids = [x.split('.')[0] for x in processed_vids]
+  if os.path.exists(flow_ranks_file):
+      df = pd.read_csv(flow_ranks_file)
+      processed_vids = list(df['vid'].unique())
+  else:
+      df = pd.DatFrame([])
+      processed_vids = []
 
   # Here are the youtube ids used by original VM-NET
   with open(args['video_file_path'], 'r') as file:
       content = file.read()  # Read the entire content of the file
   video_paths = content.split('\n')
 
-  df = pd.DataFrame()
+
   for video_path in tqdm.tqdm(video_paths):
       
       processor = OpticalFlowProcessor(target_fps=args['target_fps'],
@@ -146,9 +152,9 @@ if __name__ == '__main__':
                 'bottom_start':worst_flow[0],
                 'bottom_end':worst_flow[1]}
         df = pd.concat([df, pd.DataFrame([tmp])])
-        df.to_csv(os.path.join(args['save_path'], 'flow', 'ranks.csv'))
+        df.to_csv(flow_ranks_file)
 
       except Exception as e:
         print(e)
-      
+         
   print("Video Processing Complete")

@@ -24,12 +24,12 @@ flags.DEFINE_integer('constraint_xy', 3, 'Constraint Weight xy')
 flags.DEFINE_integer('constraint_yx',1, 'Constraint Weight yx')
 flags.DEFINE_float('constraint_x', 0.2, 'Constraint Structure Weight x')
 flags.DEFINE_float('constraint_y', 0.2, 'Constraint Structure Weight y')
-flags.DEFINE_integer('train_top_K', 1024, 'Top most K number for violation')
-flags.DEFINE_integer('test_top_K', 1024, 'Top most K number for violation')
+flags.DEFINE_integer('train_top_K', 1, 'Top most K number for violation')
+flags.DEFINE_integer('test_top_K', 1, 'Top most K number for violation')
 flags.DEFINE_float('weight_decay', 0, 'Weight decay.')
 
 flags.DEFINE_integer('num_epochs', 10000, 'number of epochs')
-flags.DEFINE_integer('train_batch_size', 1024, 'Train Batch size.') 
+flags.DEFINE_integer('train_batch_size', 2, 'Train Batch size.') 
 flags.DEFINE_integer('validation_batch_size', 1024, 'Validation Batch size.')  
 flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.')
 
@@ -42,21 +42,24 @@ flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.')
 #flags.DEFINE_string('summaries_dir', "./models/VMNET", 'Directory to put the summary and log data.')
 
 # longleaf
-flags.DEFINE_string('train_data_dir', "/proj/mcavoy_lab/Youtube8m/", 'Directory to contain audio and rgb for training samples.')
-flags.DEFINE_string('train_csv_path', "/proj/mcavoy_lab/Youtube8m/train.csv", 'Path to the csv recording all training samples')
-flags.DEFINE_string('test_data_dir', "/proj/mcavoy_lab/Youtube8m/", 'Directory to contain audio and rgb for test samples.')
-flags.DEFINE_string('test_csv_path', "/proj/mcavoy_lab/Youtube8m/test.csv", 'Path to the csv recording all test samples')
-flags.DEFINE_string('summaries_dir', "/proj/mcavoy_lab/Youtube8m//models/VMNET", 'Directory to put the summary and log data.')
+flags.DEFINE_string('video_dir', "/work/users/s/m/smerrill/Youtube8m/resnet/resnet101", 'Directory to contain vid features.')
+flags.DEFINE_string('audio_dir', "/work/users/s/m/smerrill/Youtube8m/vggish", 'Directory to contain audio features.')
+flags.DEFINE_string('train_csv_path', "/work/users/s/m/smerrill/Youtube8m/train.csv", 'Path to the csv recording all training samples')
+flags.DEFINE_string('test_csv_path', "/work/users/s/m/smerrill/Youtube8m/train.csv", 'Path to the csv recording all test samples')
+flags.DEFINE_string('summaries_dir', "/proj/mcavoy_lab/Youtube8m/models/resnet", 'Directory to put the summary and log data.')
 
 # You can change your own save_step based on the vacant space on your computer.
 flags.DEFINE_integer('display_step', 10, 'Train display step.')
-flags.DEFINE_integer('test_step', 10, 'Test step.')
+flags.DEFINE_integer('test_step', 99999999999999999, 'Test step.')
 flags.DEFINE_integer('save_step', 50, 'Checkpoint saving step.')
+
+flags.DEFINE_integer('vid_dim', 2048, 'Video Dim.')
+flags.DEFINE_integer('aud_dim', 128, 'Audio Dim.')
 
 net_opts = Model_structure.OPTS()
 net_opts.network_name = 'Wrapping Network'
-net_opts.x_dim = 128
-net_opts.y_dim = 2048  # CHANGE THE VIDEO FEAT DIM IF YOU USE DIFFERENT MODEL FOR VISUAL FEATURE EXTARCTION
+net_opts.x_dim = FLAGS.aud_dim
+net_opts.y_dim = Flags.vid_dim  # CHANGE THE VIDEO FEAT DIM IF YOU USE DIFFERENT MODEL FOR VISUAL FEATURE EXTARCTION
 net_opts.x_num_layer = FLAGS.num_layer_x
 net_opts.y_num_layer = FLAGS.num_layer_y
 net_opts.constraint_weights = [FLAGS.constraint_xy, FLAGS.constraint_yx, FLAGS.constraint_x, FLAGS.constraint_y]
@@ -91,7 +94,7 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth=True
 saver = tf.train.Saver(tf.all_variables(), max_to_keep = None)
 
-train_feats, _ = FeatLoader(FLAGS.train_csv_path, FLAGS.train_data_dir, FLAGS.train_batch_size)
+train_feats, _ = FeatLoader(FLAGS.train_csv_path, FLAGS.video_dir, FLAGS.audio_dir, FLAGS.train_batch_size)
 
 num_batchs = int(train_feats[0].get_shape()[0].value/FLAGS.train_batch_size)
 max_steps = num_batchs * FLAGS.num_epochs
@@ -101,7 +104,7 @@ print('Number of epochs {} and number of steps {} to train '.format(FLAGS.num_ep
 x_train_batch, y_train_batch, aff_train_xy = GetBatch(train_feats, FLAGS.num_epochs, FLAGS.train_batch_size, shuffle = False)
 print('finished loading TRAIN samples and infering aff_train_xy')
 
-test_feats, _ = FeatLoader(FLAGS.test_csv_path, FLAGS.test_data_dir, FLAGS.test_batch_size)
+test_feats, _ = FeatLoader(FLAGS.test_csv_path, FLAGS.video_dir, FLAGS.audio_dir, FLAGS.train_batch_size)
 x_test_batch, y_test_batch, aff_test_xy = GetBatch(test_feats, FLAGS.num_epochs, FLAGS.test_batch_size, shuffle = False)
 print('finished loading TEST samples and infering aff_test_xy')
 

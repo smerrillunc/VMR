@@ -1,29 +1,41 @@
 #!/bin/bash
-#SBATCH --job-name=i3d_extraction
-#SBATCH --time=3-04:00:00             # Adjust based on expected runtime
+
+# Paths
+VIDEO_LIST_DIR="/work/users/s/m/smerrill/Youtube8m"
+LOG_DIR="/work/users/s/m/smerrill/log"
+SCRIPT_DIR="/work/users/s/m/smerrill/video_features"
+
+# Loop through each segmented video path file
+for i in {0..9}; do
+  VIDEO_FILE="${VIDEO_LIST_DIR}/video_paths_${i}.txt"
+
+  sbatch <<EOF
+#!/bin/bash
+#SBATCH --job-name=i3d_extraction_${i}
+#SBATCH --time=1-01:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4           # Adjust based on your script's needs
-#SBATCH --mem=16G   
-#SBATCH -p a100-gpu
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH -p l40-gpu
 #SBATCH --qos=gpu_access
 #SBATCH --gres=gpu:1
-#SBATCH --output=/work/users/s/m/smerrill/log/download_job_%A.out   # STDOUT file
-#SBATCH --error=/work/users/s/m/smerrill/log/download_job_%A.err    # STDERR file
+#SBATCH --output=${LOG_DIR}/download_job_%A.out
+#SBATCH --error=${LOG_DIR}/download_job_%A.err
 
-# Load necessary modules (adjust as needed for your environment)
 module load anaconda
 conda activate video_features
 
-# Change to the working directory
-cd /work/users/s/m/smerrill/video_features
+cd ${SCRIPT_DIR}
 
-# Run the Python command
-conda run -n video_features python main.py \
-feature_type="i3d" \
-extraction_fps=32 \
-stack_size=32 \ 
-step_size=32 \
-on_extraction="save_numpy" \
-output_path="./../Youtube8m" \
-file_with_video_paths="/work/users/s/m/smerrill/Youtube8m/video_paths.txt"
+conda run -n video_features python main.py \\
+  feature_type="i3d" \\
+  extraction_fps=32 \\
+  stack_size=32 \\
+  step_size=32 \\
+  on_extraction="save_numpy" \\
+  output_path="${VIDEO_LIST_DIR}" \\
+  file_with_video_paths="${VIDEO_FILE}"
+EOF
+
+done

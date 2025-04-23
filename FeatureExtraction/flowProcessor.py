@@ -11,6 +11,19 @@ import os
 import argparse
 
 
+#!/usr/bin/env python
+import pandas as pd
+import numpy as np
+import tqdm
+
+import cv2
+import ruptures as rpt
+import torchaudio
+
+import os
+import argparse
+
+
 class OpticalFlowProcessor:
     def __init__(self, num_segments=9, min_frames=10, target_fps=3, resize_dim=(320, 240)):
         self.num_segments = num_segments
@@ -23,29 +36,35 @@ class OpticalFlowProcessor:
         cap = cv2.VideoCapture(video_path)
         original_fps = cap.get(cv2.CAP_PROP_FPS)
         self.target_fps = min(self.target_fps, original_fps)
+        print(f"ORIGINAL FPS {original_fps}, TARGET FPS {self.target_fps}")
 
         if not cap.isOpened():
             raise ValueError("Error: Unable to open the video file.")
 
-        frame_interval = int(original_fps / self.target_fps)
-        idx = 0
+        frame_time = 1.0 / original_fps
+        target_frame_time = 1.0 / self.target_fps
+        next_sample_time = 0.0
+        current_time = 0.0
 
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-            if idx % frame_interval == 0:
+
+            if current_time >= next_sample_time:
                 resized = cv2.resize(frame, self.resize_dim)
                 frames.append(resized)
-            idx += 1
+                next_sample_time += target_frame_time
+
+            current_time += frame_time
 
         cap.release()
         return frames
 
     def get_of_ranks(self, flow_trajectory, segments):
-        segment_means = self.compute_segment_means(segments, flow_trajectory)
-        ranks = self.rank_averages(segment_means)
-        return ranks
+            segment_means = self.compute_segment_means(segments, flow_trajectory)
+            ranks = self.rank_averages(segment_means)
+            return ranks
 
     def get_best_worst_flow_times(self, segments, ranks):
         top_start, top_end = segments[np.where(ranks == 1)[0][0]], segments[np.where(ranks == 1)[0][0] + 1]
@@ -66,6 +85,9 @@ class OpticalFlowProcessor:
 
     @staticmethod
     def compute_of(img1, img2):
+        if img1 is None or img2 is None:
+            raise ValueError("One of the images is None in compute_of.")
+
         prev_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
         curr_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
         flow = cv2.calcOpticalFlowFarneback(prev_gray, curr_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
@@ -90,7 +112,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Read file content.')
   parser.add_argument("-t", "--target_fps", type=int, default=3, help='Target FPS to sample OF')
   parser.add_argument("-mf", "--min_frames", type=int, default=10, help='Minimum number of 1-second frames to include for segments')
-  parser.add_argument("-ns", "--num_segments", type=int, default=10, help='Number of Segments to create')
+  parser.add_argument("-ns", "--num_segments", type=int, default=7, help='Number of Segments to create')
 
   parser.add_argument("-vf", "--video_file_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/video_paths.txt', help='Path to video file')
   parser.add_argument("-sp", "--save_path", type=str, default='/work/users/s/m/smerrill/Youtube8m', help='Save Path')
@@ -128,7 +150,7 @@ if __name__ == '__main__':
 
         if vid in processed_vids:
           print(f"VID: {vid} already processed, skipping")
-          #continue
+          continue
         else:
           print(f"Processing VID: {vid}")
 

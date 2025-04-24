@@ -113,21 +113,20 @@ if __name__ == '__main__':
   parser.add_argument("-t", "--target_fps", type=int, default=3, help='Target FPS to sample OF')
   parser.add_argument("-mf", "--min_frames", type=int, default=10, help='Minimum number of 1-second frames to include for segments')
   parser.add_argument("-ns", "--num_segments", type=int, default=7, help='Number of Segments to create')
-
   parser.add_argument("-vf", "--video_file_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/video_paths.txt', help='Path to video file')
   parser.add_argument("-sp", "--save_path", type=str, default='/work/users/s/m/smerrill/Youtube8m', help='Save Path')
   
   args = vars(parser.parse_args())
 
   os.makedirs(os.path.join(args['save_path'], 'flow'), exist_ok=True)
-  flow_ranks_file = os.path.join(args['save_path'], 'flow', 'ranks.csv')
-  
+  df_save_name = args['save_path'].split('/')[-1].replace('.txt', '.csv')
+  flow_ranks_file = os.path.join(args['save_path'], 'flow', df_save_name)
 
   if os.path.exists(flow_ranks_file):
       df = pd.read_csv(flow_ranks_file)
       processed_vids = list(df['vid'].unique())
   else:
-      df = pd.DatFrame([])
+      df = pd.DataFrame([])
       processed_vids = []
 
   # Here are the youtube ids used by original VM-NET

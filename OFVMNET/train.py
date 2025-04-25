@@ -1,4 +1,4 @@
-aimport os
+import os
 import pandas as pd
 import numpy as np
 import torch
@@ -43,10 +43,10 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--margin", type=float, default=0.1, help='Margin parameter for OF triplet loss')
 
     # Learning Params
-    parser.add_argument("-bs", "--batch_size", type=int, default=10, help='Train Batch Size')
+    parser.add_argument("-bs", "--batch_size", type=int, default=128, help='Train Batch Size')
     parser.add_argument("-e", "--epochs", type=int, default=1000, help='Epochs')
-    parser.add_argument("-k", "--top_k", type=int, default=10, help='Top k violating examples')
-    parser.add_argument("-fk", "--flow_k", type=int, default=10, help='Mine this many top and bottom flow examples')
+    parser.add_argument("-k", "--top_k", type=int, default=16, help='Top k violating examples')
+    parser.add_argument("-fk", "--flow_k", type=int, default=16, help='Mine this many top and bottom flow examples')
 
     # Longleaf
     parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')    
@@ -71,9 +71,12 @@ if __name__ == '__main__':
     # Define the Adam optimizer for the video model
     video_optimizer = optim.Adam(video_model.parameters(), lr=args['learning_rate'])
 
-    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], args['flow_ranks_file'])
+    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], args['flow_ranks_file'], args['max_seq_len'])
+    print(f"Total Training Examples: {len(meta_df)}")
+
     dataset = VideoAudioDataset(meta_df)
     dataloader = DataLoader(dataset, batch_size=args['batch_size'], shuffle=True, collate_fn=utils.custom_collate)
+
 
     triplet_loss = nn.TripletMarginLoss(margin=args['margin'])
 

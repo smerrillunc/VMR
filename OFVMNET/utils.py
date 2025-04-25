@@ -4,8 +4,9 @@ import torch
 import matplotlib.pyplot as plt
 from eval import Eval
 import os
+import ast
 
-def get_meta_df(video_feature_path, audio_feature_path, flow_rank_file):
+def get_meta_df(video_feature_path, audio_feature_path, flow_rank_file, max_seq_len):
     def parse_ranks_str(ranks_str):
         # Remove tuple and quotes, then extract numbers
         cleaned = ranks_str.strip("(),'")  # removes parentheses, commas, quotes
@@ -28,6 +29,9 @@ def get_meta_df(video_feature_path, audio_feature_path, flow_rank_file):
 
     df['ranks'] = df['ranks'].apply(
         lambda x: parse_ranks_str(x) if isinstance(x, str) else list(map(int, x)))
+
+    # drop entire videos who's max sequence length doesn't comply
+    df = df[df['segments'].apply(lambda s: max(np.diff(ast.literal_eval(s))) <= max_seq_len)].reset_index(drop=True)
 
     return df
 

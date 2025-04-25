@@ -119,7 +119,7 @@ if __name__ == '__main__':
   args = vars(parser.parse_args())
 
   os.makedirs(os.path.join(args['save_path'], 'flow'), exist_ok=True)
-  df_save_name = args['save_path'].split('/')[-1].replace('.txt', '.csv')
+  df_save_name = args['video_file_path'].split('/')[-1].replace('.txt', '.csv')
   flow_ranks_file = os.path.join(args['save_path'], 'flow', df_save_name)
 
   if os.path.exists(flow_ranks_file):

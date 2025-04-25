@@ -24,12 +24,12 @@ flags.DEFINE_integer('constraint_xy', 3, 'Constraint Weight xy')
 flags.DEFINE_integer('constraint_yx',1, 'Constraint Weight yx')
 flags.DEFINE_float('constraint_x', 0.2, 'Constraint Structure Weight x')
 flags.DEFINE_float('constraint_y', 0.2, 'Constraint Structure Weight y')
-flags.DEFINE_integer('train_top_K', 1, 'Top most K number for violation')
-flags.DEFINE_integer('test_top_K', 1, 'Top most K number for violation')
+flags.DEFINE_integer('train_top_K', 10, 'Top most K number for violation')
+flags.DEFINE_integer('test_top_K', 10, 'Top most K number for violation')
 flags.DEFINE_float('weight_decay', 0, 'Weight decay.')
 
 flags.DEFINE_integer('num_epochs', 10000, 'number of epochs')
-flags.DEFINE_integer('train_batch_size', 2, 'Train Batch size.') 
+flags.DEFINE_integer('train_batch_size', 1024, 'Train Batch size.') 
 flags.DEFINE_integer('validation_batch_size', 1024, 'Validation Batch size.')  
 flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.')
 
@@ -59,7 +59,7 @@ flags.DEFINE_integer('aud_dim', 128, 'Audio Dim.')
 net_opts = Model_structure.OPTS()
 net_opts.network_name = 'Wrapping Network'
 net_opts.x_dim = FLAGS.aud_dim
-net_opts.y_dim = Flags.vid_dim  # CHANGE THE VIDEO FEAT DIM IF YOU USE DIFFERENT MODEL FOR VISUAL FEATURE EXTARCTION
+net_opts.y_dim = FLAGS.vid_dim  # CHANGE THE VIDEO FEAT DIM IF YOU USE DIFFERENT MODEL FOR VISUAL FEATURE EXTARCTION
 net_opts.x_num_layer = FLAGS.num_layer_x
 net_opts.y_num_layer = FLAGS.num_layer_y
 net_opts.constraint_weights = [FLAGS.constraint_xy, FLAGS.constraint_yx, FLAGS.constraint_x, FLAGS.constraint_y]

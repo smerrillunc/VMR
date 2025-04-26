@@ -6,6 +6,33 @@ from eval import Eval
 import os
 import ast
 
+def create_feature_to_file_dicts(vid_path, vid_feature_path, aud_path, aud_feature_path):
+    """
+    Create dictionaries mapping feature file paths to raw file paths.
+
+    Args:
+        vid_path (str): Path to the directory containing video files.
+        vid_feature_path (str): Path to the directory containing video feature files.
+        aud_path (str): Path to the directory containing audio files.
+        aud_feature_path (str): Path to the directory containing audio feature files.
+
+    Returns:
+        vid_dict (dict): Mapping from video feature file paths to video file paths.
+        aud_dict (dict): Mapping from audio feature file paths to audio file paths.
+    """
+    vid_files = [os.path.join(vid_path, x) for x in os.listdir(vid_path) if '.part' not in x]
+    vid_features = [os.path.join(vid_feature_path, os.path.splitext(x)[0] + '.npy') for x in os.listdir(vid_path) if '.part' not in x]
+
+    aud_files = [os.path.join(aud_path, x) for x in os.listdir(aud_path) if '.part' not in x]
+    aud_features = [os.path.join(aud_feature_path, os.path.splitext(x)[0] + '.npy') for x in os.listdir(aud_path) if '.part' not in x]
+
+    vid_dict = dict(zip(vid_features, vid_files))
+    aud_dict = dict(zip(aud_features, aud_files))
+
+    return vid_dict, aud_dict
+
+
+
 def get_meta_df(video_feature_path, audio_feature_path, flow_rank_file, max_seq_len):
     def parse_ranks_str(ranks_str):
         # Remove tuple and quotes, then extract numbers
@@ -40,6 +67,10 @@ def custom_collate(batch):
     # Return as lists so you can deal with variable shapes manually
     return list(videos), list(audios), list(segments), list(ranks)
 
+def custom_collate_testset(batch):
+    videos, audios, segments, vidfile, audfile = zip(*batch)
+    # Return as lists so you can deal with variable shapes manually
+    return list(videos), list(audios), list(segments), list(vidfile), list(audfile)
 
 def perform_feature_padding(video_features, audio_features, start_segment, end_segment, max_seq_len):
     #vf = video_features.clone().detach()
@@ -65,6 +96,7 @@ def save_checkpoint(model, optimizer, epoch, filename):
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
+        'model_args': model.args,
         'optimizer_state_dict': optimizer.state_dict(),
     }
     torch.save(checkpoint, filename)

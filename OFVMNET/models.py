@@ -7,6 +7,16 @@ import math
 class Transformer(nn.Module):
     def __init__(self, input_dim=1024, embed_dim=512, num_heads=8, num_layers=2, max_seq_len=50):
         super().__init__()
+        # Save the initialization arguments
+        self.args = {
+            'input_dim': input_dim,
+            'embed_dim': embed_dim,
+            'num_heads': num_heads,
+            'num_layers': num_layers,
+            'max_seq_len': max_seq_len
+        }
+
+
         self.input_proj = nn.Linear(input_dim, embed_dim)  # Project input to embedding dim
         self.pos_encoder = self._generate_sinusoidal_positional_encoding(max_seq_len, embed_dim)
         # can't batch first because we require a mask

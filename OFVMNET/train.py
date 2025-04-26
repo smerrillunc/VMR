@@ -24,8 +24,8 @@ if __name__ == '__main__':
 
     # TRANSFORMER PARAMS
     parser.add_argument("-ms", "--max_seq_len", type=int, default=200, help='Max sequence laength for Transformer Encoders')
-    parser.add_argument("-nh", "--num_heads", type=int, default=1, help='Number of Heads for Transformer Encoders')
-    parser.add_argument("-nl", "--num_layers", type=int, default=1, help='Number of Layers for Transformer Encoders')
+    parser.add_argument("-nh", "--num_heads", type=int, default=4, help='Number of Heads for Transformer Encoders')
+    parser.add_argument("-nl", "--num_layers", type=int, default=4, help='Number of Layers for Transformer Encoders')
 
     parser.add_argument("-ida", "--input_dim_audio", type=int, default=128, help='Audio input dimension')
     parser.add_argument("-idv", "--input_dim_video", type=int, default=2048, help='Video input dimension')
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument("-fk", "--flow_k", type=int, default=16, help='Mine this many top and bottom flow examples')
 
     # Longleaf
-    parser.add_argument("-sp", "--save_path", type=str, default='/nas/longleaf/home/smerrill/PD/data', help='save path')    
+    parser.add_argument("-sp", "--save_path", type=str, default='/work/users/s/m/smerrill/OFVMNET/models/resnet', help='save path')    
     parser.add_argument("-vfp", "--video_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/resnet/resnet101', help='Path to video Features File')
     parser.add_argument("-afp", "--audio_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/vggish', help='Path to audio Features File')
     parser.add_argument("-frf", "--flow_ranks_file", type=str, default='/work/users/s/m/smerrill/Youtube8m/flow/ranks.csv', help='Path to OF ranks file')
@@ -81,7 +81,10 @@ if __name__ == '__main__':
     triplet_loss = nn.TripletMarginLoss(margin=args['margin'])
 
     df = pd.DataFrame()
-
+    epoch=0
+    utils.save_checkpoint(video_model, video_optimizer, epoch, args['save_path'] + f'/video_{epoch}.pth')
+    utils.save_checkpoint(audio_model, audio_optimizer, epoch, args['save_path'] + f'/audio_{epoch}.pth')
+    print("Model Saved")
     # Batch iterator
     for epoch in tqdm.tqdm(range(args['epochs'])):
         print(f"Starting Epoch {epoch}")

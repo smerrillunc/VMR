@@ -112,3 +112,52 @@ def GetBatch(feats_list, num_epochs, batch_size, shuffle = False):
     x_batch, y_batch, aff_xy = tf.train.batch(input_queue, batch_size=batch_size, num_threads=1, capacity=batch_size, 
                                                                                   allow_smaller_final_batch=False)
     return x_batch, y_batch, aff_xy
+
+
+def FeatLoaderTestset(csv_path, video_dir, audio_dir, vid_dict, aud_dict):
+    x_feats_list = []
+    y_feats_list = []
+    x_file_list = []
+    y_file_list = []
+    labels_list = []
+
+    with open(csv_path, 'r') as file:
+        filenames = [line.strip() for line in file.readlines()]
+
+    for j, filename in enumerate(filenames):
+        audio_path = os.path.join(audio_dir, filename)
+        video_path = os.path.join(video_dir, filename)
+
+        try:
+            audio_feat = np.load(audio_path)
+            video_feat = np.load(video_path)
+
+            if audio_feat.size == 0 or video_feat.size == 0:
+                print(f"Skipping {filename} due to empty features")
+                continue
+
+            a_mean = np.mean(audio_feat, axis=0)
+            v_mean = np.mean(video_feat, axis=0)
+
+            # Check if mean resulted in scalar
+            if np.ndim(a_mean) == 0 or np.ndim(v_mean) == 0:
+                print(f"Skipping {filename} due to scalar feature")
+                continue
+                
+            y_feats_list.append(tf.convert_to_tensor(v_mean))
+            x_feats_list.append(tf.convert_to_tensor(a_mean))
+
+            y_file_list.append(vid_dict[video_path])
+            x_file_list.append(aud_dict[audio_path])
+            
+        except Exception as e:
+            print(f"Failed to load {filename}: {e}")
+            continue
+
+    labels_list  = tf.convert_to_tensor(np.eye(len(x_feats_list)))
+    y_feats = tf.convert_to_tensor(y_feats_list)
+    x_feats = tf.convert_to_tensor(x_feats_list)    
+    
+    print(x_feats.shape[0], y_feats.shape[0], labels_list.shape[0])
+    assert x_feats.shape[0] == y_feats.shape[0] == labels_list.shape[0]
+    return [x_feats, y_feats, labels_list, x_file_list, y_file_list]

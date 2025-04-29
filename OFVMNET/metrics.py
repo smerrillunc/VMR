@@ -87,6 +87,18 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     return torch.tensor(distance, dtype=torch.float32)
 
 
+def compute_fad(real_embeddings, retrieved_embeddings):
+    """Compute FAD between real and generated embeddings."""
+    mu_real = real_embeddings.mean(dim=0)
+    sigma_real = torch.cov(real_embeddings.T)
+
+    mu_gen = retrieved_embeddings.mean(dim=0)
+    sigma_gen = torch.cov(retrieved_embeddings.T)
+
+    fad = calculate_frechet_distance(mu_real, sigma_real, mu_gen, sigma_gen)
+    return fad
+
+
 ## AV-ALIGN Functions
 # Function to extract frames from a video file
 def extract_frames(video_path):

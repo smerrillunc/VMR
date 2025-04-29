@@ -6,6 +6,44 @@ from eval import Eval
 import os
 import ast
 
+def get_latest_models(directory):
+    # List all files in the directory
+    files = os.listdir(directory)
+
+    # Patterns for video and audio models
+    video_pattern = r"video_(\d+)\.pth"
+    audio_pattern = r"audio_(\d+)\.pth"
+
+    video_models = []
+    audio_models = []
+
+    for file in files:
+        # Check if file matches the video pattern
+        video_match = re.match(video_pattern, file)
+        if video_match:
+            num = int(video_match.group(1))
+            video_models.append((num, file))
+        
+        # Check if file matches the audio pattern
+        audio_match = re.match(audio_pattern, file)
+        if audio_match:
+            num = int(audio_match.group(1))
+            audio_models.append((num, file))
+
+    # If no matching models found, return None
+    if not video_models or not audio_models:
+        return None, None
+
+    # Find the video and audio models with the largest num
+    latest_video_model = max(video_models, key=lambda x: x[0])
+    latest_audio_model = max(audio_models, key=lambda x: x[0])
+
+    # Return the full paths of the models with the largest num
+    latest_video_model_path = os.path.join(directory, latest_video_model[1])
+    latest_audio_model_path = os.path.join(directory, latest_audio_model[1])
+
+    return latest_video_model_path, latest_audio_model_path
+    
 def create_feature_to_file_dicts(vid_path, vid_feature_path, aud_path, aud_feature_path):
     """
     Create dictionaries mapping feature file paths to raw file paths.

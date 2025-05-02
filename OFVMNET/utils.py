@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from eval import Eval
 import os
 import ast
+import re
 
 def get_latest_models(directory):
     # List all files in the directory

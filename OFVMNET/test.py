@@ -59,8 +59,8 @@ if __name__ == '__main__':
     audio_model.load_state_dict(audio_checkpoint['model_state_dict'])
     print("Video and Audio Models Loaded!")
 
-
-    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], args['flow_ranks_file'], args['max_seq_len'])
+    # limit to 1600 examples for Youtube8m
+    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], args['flow_ranks_file'], args['max_seq_len']).head(1600)
     print(f"Total Training Examples: {len(meta_df)}")
 
     vid_dict, aud_dict = utils.create_feature_to_file_dicts(args['raw_video_path'], args['video_feature_path'], args['raw_audio_path'], args['audio_feature_path'])
@@ -96,22 +96,25 @@ if __name__ == '__main__':
         av_aligns = []
         got_aligns = []
         for idx, retrieval in enumerate(most_similar_indices):
-            # for FAD
-            gots.append(batch_aud_embeddings[idx])
-            retrievals.append(batch_aud_embeddings[retrieval])
-
-            # Av-align
-            frames, fps = metrics.extract_frames(vidfiles[idx])
-            _, video_peaks = metrics.detect_video_peaks(frames, fps)
-
-            audio_peaks1 = metrics.detect_audio_peaks(audfiles[retrieval])
-            audio_peaks2 = metrics.detect_audio_peaks(audfiles[idx])
-            av_align = metrics.calc_intersection_over_union(audio_peaks1, video_peaks, fps)
-            got_av_align = metrics.calc_intersection_over_union(audio_peaks2, video_peaks, fps)
-
-            print(f'idx {idx}, AV-ALIGN: {av_align}, GOT-AV-ALIGN: {got_av_align}')
-            av_aligns.append(av_align)
-            got_aligns.append(got_av_align)
+            try:
+                # for FAD
+                gots.append(batch_aud_embeddings[idx])
+                retrievals.append(batch_aud_embeddings[retrieval])
+    
+                # Av-align
+                frames, fps = metrics.extract_frames(vidfiles[idx])
+                _, video_peaks = metrics.detect_video_peaks(frames, fps)
+    
+                audio_peaks1 = metrics.detect_audio_peaks(audfiles[retrieval])
+                audio_peaks2 = metrics.detect_audio_peaks(audfiles[idx])
+                av_align = metrics.calc_intersection_over_union(audio_peaks1, video_peaks, fps)
+                got_av_align = metrics.calc_intersection_over_union(audio_peaks2, video_peaks, fps)
+    
+                print(f'idx {idx}, AV-ALIGN: {av_align}, GOT-AV-ALIGN: {got_av_align}')
+                av_aligns.append(av_align)
+                got_aligns.append(got_av_align)
+            except Exception as e:
+                print(e)
 
             
         fad_score = metrics.compute_fad(torch.stack(gots).detach(), torch.stack(retrievals).detach())

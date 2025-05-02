@@ -17,19 +17,10 @@
 
 import numpy
 import tensorflow.compat.v1 as tf
+import os
 tf.disable_v2_behavior() 
-from tensorflow import logging
-
 
 def Dequantize(feat_vector, max_quantized_value=2, min_quantized_value=-2):
-    """Dequantize the feature from the byte format to the float format.
-    Args:
-    feat_vector: the input 1-d vector.
-    max_quantized_value: the maximum of the quantized value.
-    min_quantized_value: the minimum of the quantized value.
-    Returns:
-        A float vector which has the same shape as feat_vector.
-  """
     assert max_quantized_value > min_quantized_value
     quantized_range = max_quantized_value - min_quantized_value
     scalar = quantized_range / 255.0
@@ -103,16 +94,6 @@ def AddEpochSummary(summary_writer,
                     global_step_val,
                     epoch_info_dict,
                     summary_scope="Eval"):
-  """Add the epoch summary to the Tensorboard.
-  Args:
-    summary_writer: Tensorflow summary_writer.
-    global_step_val: a int value of the global step.
-    epoch_info_dict: a dictionary of the evaluation metrics calculated for the
-      whole epoch.
-    summary_scope: Train or Eval.
-  Returns:
-    A string of this global_step summary
-  """
     epoch_id = epoch_info_dict["epoch_id"]
     avg_hit_at_one = epoch_info_dict["avg_hit_at_one"]
     avg_perr = epoch_info_dict["avg_perr"]
@@ -158,22 +139,36 @@ def AddEpochSummary(summary_writer,
     return info
 
 def GetListOfFeatureNamesAndSizes(feature_names, feature_sizes):
-    """Extract the list of feature names and the dimensionality of each feature
-     from string of comma separated values.
-  Args:
-    feature_names: string containing comma separated list of feature names
-    feature_sizes: string containing comma separated list of feature sizes
-  Returns:
-    List of the feature names and list of the dimensionality of each feature.
-    Elements in the first/second list are strings/integers.
-  """
+
     list_of_feature_names = [
       feature_names.strip() for feature_names in feature_names.split(',')]
-    logging.info("Feature sizes help: %s", feature_sizes)
     list_of_feature_sizes = [int(feature_sizes) for feature_sizes in feature_sizes.split(',')]
-    if len(list_of_feature_names) != len(list_of_feature_sizes):
-        logging.error("length of the feature names (=" +
-                  str(len(list_of_feature_names)) + ") != length of feature "
-                  "sizes (=" + str(len(list_of_feature_sizes)) + ")")
 
     return list_of_feature_names, list_of_feature_sizes
+
+
+def create_feature_to_file_dicts(vid_path, vid_feature_path, aud_path, aud_feature_path):
+    """
+    Create dictionaries mapping feature file paths to raw file paths.
+
+    Args:
+        vid_path (str): Path to the directory containing video files.
+        vid_feature_path (str): Path to the directory containing video feature files.
+        aud_path (str): Path to the directory containing audio files.
+        aud_feature_path (str): Path to the directory containing audio feature files.
+
+    Returns:
+        vid_dict (dict): Mapping from video feature file paths to video file paths.
+        aud_dict (dict): Mapping from audio feature file paths to audio file paths.
+    """
+    vid_files = [os.path.join(vid_path, x) for x in os.listdir(vid_path) if '.part' not in x]
+    vid_features = [os.path.join(vid_feature_path, os.path.splitext(x)[0] + '.npy') for x in os.listdir(vid_path) if '.part' not in x]
+
+    aud_files = [os.path.join(aud_path, x) for x in os.listdir(aud_path) if '.part' not in x]
+    aud_features = [os.path.join(aud_feature_path, os.path.splitext(x)[0] + '.npy') for x in os.listdir(aud_path) if '.part' not in x]
+
+    vid_dict = dict(zip(vid_features, vid_files))
+    aud_dict = dict(zip(aud_features, aud_files))
+
+    return vid_dict, aud_dict
+

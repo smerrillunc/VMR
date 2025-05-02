@@ -9,6 +9,8 @@ from network_structure import Model_structure
 import metrics
 from utils.utils import create_feature_to_file_dicts
 import csv
+import torch
+import gc
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -24,11 +26,11 @@ flags.DEFINE_integer('test_batch_size', 1024, 'Test batch size.') #flags.DEFINE_
 #flags.DEFINE_string('summaries_dir', "./models/MV_9k_efficient_b5_Avgpool_MUSICNN_penultimate_Structure_Nonlinear_single_loss_margin_0.5_emb_512_epochs_101_GlobalAvg", 'Directory to put the summary and log data.')
 
 #longleaf
-flags.DEFINE_string('video_dir', "/work/users/s/m/smerrill/Youtube8m/video", 'Directory to contain vid features.')
-flags.DEFINE_string('audio_dir', "/work/users/s/m/smerrill/Youtube8m/audio", 'Directory to contain audio features.')
-flags.DEFINE_string('video_feature_dir', "/work/users/s/m/smerrill/Youtube8m/resnet/resnet101", 'Directory to contain vid features.')
-flags.DEFINE_string('audio_feature_dir', "/work/users/s/m/smerrill/Youtube8m/vggish", 'Directory to contain audio features.')
-flags.DEFINE_string('test_csv_path', "/proj/mcavoy_lab/Youtube8m/test.csv", 'Path to the csv recording all test samples')
+flags.DEFINE_string('video_dir', "/work/users/s/m/smerrill/SymMV/video", 'Directory to contain vid features.')
+flags.DEFINE_string('audio_dir', "/work/users/s/m/smerrill/SymMV/audio", 'Directory to contain audio features.')
+flags.DEFINE_string('video_feature_dir', "/work/users/s/m/smerrill/SymMV/resnet/resnet101", 'Directory to contain vid features.')
+flags.DEFINE_string('audio_feature_dir', "/work/users/s/m/smerrill/SymMV/vggish", 'Directory to contain audio features.')
+flags.DEFINE_string('test_csv_path', "/work/users/s/m/smerrill/SymMV/test_resnet.csv", 'Path to the csv recording all test samples')
 flags.DEFINE_string('summaries_dir', "/proj/mcavoy_lab/Youtube8m/models/resnet", 'Directory to put the summary and log data.')
 
 
@@ -50,7 +52,7 @@ net_opts.is_linear = False
 net = Model_structure(net_opts)
 net.construct()
 
-
+print(FLAGS.video_feature_dir)
 vid_dict, aud_dict = create_feature_to_file_dicts(FLAGS.video_dir, FLAGS.video_feature_dir, FLAGS.audio_dir, FLAGS.audio_feature_dir)
 
 x_batch, y_batch, aff_xy, audio_files, video_files = FeatLoaderTestset(FLAGS.test_csv_path, \
@@ -112,18 +114,23 @@ with tf.Session() as sess:
             got_aligns = []
 
             for idx, retrieval in enumerate(top1):
-                # Av-align
-                frames, fps = metrics.extract_frames(video_files[idx])
-                _, video_peaks = metrics.detect_video_peaks(frames, fps)
-
-                audio_peaks1 = metrics.detect_audio_peaks(audio_files[retrieval[0]])
-                audio_peaks2 = metrics.detect_audio_peaks(audio_files[idx])
-                av_align = metrics.calc_intersection_over_union(audio_peaks1, video_peaks, fps)
-                got_av_align = metrics.calc_intersection_over_union(audio_peaks2, video_peaks, fps)
-
-                print(f'idx {idx}, AV-ALIGN: {av_align}, GOT-AV-ALIGN: {got_av_align}')
-                av_aligns.append(av_align)
-                got_aligns.append(got_av_align)
+                try:
+                    # Av-align
+                    frames, fps = metrics.extract_frames(video_files[idx])
+                    _, video_peaks = metrics.detect_video_peaks(frames, fps)
+    
+                    audio_peaks1 = metrics.detect_audio_peaks(audio_files[retrieval[0]])
+                    audio_peaks2 = metrics.detect_audio_peaks(audio_files[idx])
+                    av_align = metrics.calc_intersection_over_union(audio_peaks1, video_peaks, fps)
+                    got_av_align = metrics.calc_intersection_over_union(audio_peaks2, video_peaks, fps)
+    
+                    print(f'idx {idx}, AV-ALIGN: {av_align}, GOT-AV-ALIGN: {got_av_align}')
+                    av_aligns.append(av_align)
+                    got_aligns.append(got_av_align)
+                    gc.collect()
+                except Exception as e:
+                    print(e)
+                    
             print(f"Overall AV-ALIGN {np.mean(av_aligns)}; Overall GOT-AV-ALIGN {np.mean(got_aligns)}")
 
             csv_path = os.path.join(checkpoint_dir, f"metrics_step_{step}.csv")

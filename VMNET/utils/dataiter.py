@@ -113,8 +113,34 @@ def GetBatch(feats_list, num_epochs, batch_size, shuffle = False):
                                                                                   allow_smaller_final_batch=False)
     return x_batch, y_batch, aff_xy
 
+def pad_or_truncate(arr, pad_length=400):
+    """
+    Pads or truncates a 2D numpy array to the specified number of rows.
 
-def FeatLoaderTestset(csv_path, video_dir, audio_dir, vid_dict, aud_dict):
+    If the array has fewer rows than `pad_length`, it repeats rows from the start
+    to reach the target length. If it has more, it truncates to `pad_length`.
+
+    Parameters:
+        arr (np.ndarray): Input array of shape (N, D).
+        pad_length (int): Desired number of rows in the output array.
+
+    Returns:
+        np.ndarray: Output array of shape (pad_length, D).
+    """
+    current_length = arr.shape[0]
+    
+    if current_length == pad_length:
+        return arr
+    elif current_length > pad_length:
+        return arr[:pad_length]
+    else:
+        needed = pad_length - current_length
+        repeat_times = (needed + current_length - 1) // current_length  # Ceiling division
+        repeated = np.tile(arr, (repeat_times + 1, 1))[:needed]
+        return np.vstack((arr, repeated))
+
+
+def FeatLoaderTestset(csv_path, video_dir, audio_dir, vid_dict, aud_dict, pad_size):
     x_feats_list = []
     y_feats_list = []
     x_file_list = []
@@ -131,6 +157,10 @@ def FeatLoaderTestset(csv_path, video_dir, audio_dir, vid_dict, aud_dict):
         try:
             audio_feat = np.load(audio_path)
             video_feat = np.load(video_path)
+
+            if pad_size > 0:
+                audio_feat = pad_or_truncate(audio_feat)
+                video_feat = pad_or_truncate(video_feat)
 
             if audio_feat.size == 0 or video_feat.size == 0:
                 print(f"Skipping {filename} due to empty features")

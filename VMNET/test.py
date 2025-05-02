@@ -11,6 +11,7 @@ from utils.utils import create_feature_to_file_dicts
 import csv
 import torch
 import gc
+import wandb
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -40,6 +41,7 @@ flags.DEFINE_float('constraint_x', 0.2, 'Constraint Structure Weight x')
 flags.DEFINE_float('constraint_y', 0.2, 'Constraint Structure Weight y')
 flags.DEFINE_integer('vid_dim', 2048, 'Video Dim.')
 flags.DEFINE_integer('aud_dim', 128, 'Audio Dim.')
+flags.DEFINE_integer('pad_size', 0, 'PadSize')
 
 net_opts = Model_structure.OPTS()
 net_opts.network_name = 'Wrapping Network'
@@ -52,14 +54,31 @@ net_opts.is_linear = False
 net = Model_structure(net_opts)
 net.construct()
 
+features = FLAGS.video_feature_dir.split('/')[-1]
+dataset = FLAGS.video_feature_dir.split('smerrill/')[1].split('/')[0]
+run_name = f'{dataset}_{features}_{str(FLAGS.pad_size)}'
+print(features, dataset)
+
+wandb.init(
+    project="VMNET",  # Change this to your preferred project name
+    name=run_name,  # Set custom run name
+    config={
+        "padding": FLAGS.pad_size,
+        "video_feature_dir": FLAGS.video_feature_dir,
+        "test_csv_path": FLAGS.test_csv_path,
+        "summaries_dir": FLAGS.summaries_dir})
+
+
 print(FLAGS.video_feature_dir)
 vid_dict, aud_dict = create_feature_to_file_dicts(FLAGS.video_dir, FLAGS.video_feature_dir, FLAGS.audio_dir, FLAGS.audio_feature_dir)
+
 
 x_batch, y_batch, aff_xy, audio_files, video_files = FeatLoaderTestset(FLAGS.test_csv_path, \
                                                                        FLAGS.video_feature_dir,\
                                                                        FLAGS.audio_feature_dir,\
                                                                        vid_dict,\
-                                                                       aud_dict)
+                                                                       aud_dict,
+                                                                       FLAGS.pad_size)
 
 
 saver = tf.train.Saver(tf.global_variables())
@@ -106,9 +125,33 @@ with tf.Session() as sess:
                 real_embeddings.append(torch.tensor(real_embedding))
                 retrieved_embeddings.append(torch.tensor(retrieved_embedding))
 
-            fad_score = metrics.compute_fad(torch.stack(real_embeddings), torch.stack(retrieved_embeddings))
+            real_embeddings = torch.stack(real_embeddings)
+            retrieved_embeddings = torch.stack(retrieved_embeddings)
+            fad_score = metrics.compute_fad(real_embeddings, retrieved_embeddings)
+            KLD1 = metrics.compute_kld(real_embeddings, retrieved_embeddings)
+            KLD2 = metrics.compute_kld(retrieved_embeddings, real_embeddings)
+
             print(f"FAD: {fad_score}")
             
+            wandb.log({
+                "step": int(step),
+                "FAD": fad_score,
+                "KLD1": KLD1,
+                "KLD2": KLD2,
+                "XY_R@1": xy[0],
+                "XY_R@5": xy[1],
+                "XY_R@10": xy[2],
+                "XY_R@20": xy[3],
+                "XY_R@50": xy[4],
+                "XY_R@100": xy[5],
+                "YX_R@1": yx[0],
+                "YX_R@5": yx[1],
+                "YX_R@10": yx[2],
+                "YX_R@20": yx[3],
+                "YX_R@50": yx[4],
+                "YX_R@100": yx[5]
+            })
+
             
             av_aligns = []
             got_aligns = []
@@ -127,11 +170,27 @@ with tf.Session() as sess:
                     print(f'idx {idx}, AV-ALIGN: {av_align}, GOT-AV-ALIGN: {got_av_align}')
                     av_aligns.append(av_align)
                     got_aligns.append(got_av_align)
+
+                    # Log each individual AV-ALIGN to W&B
+                    wandb.log({
+                        "step": int(step),
+                        "Sample_ID": idx,
+                        "Top1_Index": retrieval[0],
+                        "AV_ALIGN": av_align,
+                        "GOT_AV_ALIGN": got_av_align
+                    })
+
                     gc.collect()
                 except Exception as e:
                     print(e)
                     
             print(f"Overall AV-ALIGN {np.mean(av_aligns)}; Overall GOT-AV-ALIGN {np.mean(got_aligns)}")
+
+            wandb.log({
+                "step": int(step),
+                "Mean_AV_ALIGN": np.mean(av_aligns),
+                "Mean_GOT_AV_ALIGN": np.mean(got_aligns),
+            })
 
             csv_path = os.path.join(checkpoint_dir, f"metrics_step_{step}.csv")
 

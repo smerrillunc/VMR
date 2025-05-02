@@ -126,3 +126,37 @@ def compute_fad(real_embeddings, retrieved_embeddings):
 
     fad = calculate_frechet_distance(mu_real, sigma_real, mu_gen, sigma_gen)
     return fad
+
+
+## KLD
+def calculate_kl_divergence(mu1, logvar1, mu2, logvar2):
+    """
+    Calculate KL divergence between two diagonal Gaussians:
+    N(mu1, sigma1^2) and N(mu2, sigma2^2)
+
+    logvar1/logvar2: log of variance vectors (assumed diagonal)
+    Returns scalar KL divergence.
+    """
+    var1 = logvar1.exp()
+    var2 = logvar2.exp()
+    kl = 0.5 * (logvar2 - logvar1 + (var1 + (mu1 - mu2).pow(2)) / var2 - 1)
+    return kl.sum()  # sum over dimensions
+
+def compute_gaussian_stats(embeddings, eps=1e-6):
+    """Returns mean and log-variance for embeddings assuming diagonal Gaussian."""
+    mu = embeddings.mean(dim=0)
+    var = embeddings.var(dim=0, unbiased=False) + eps
+    logvar = var.log()
+    return mu, logvar
+
+def compute_kld(real_embeddings, retrieved_embeddings):
+    """
+    Compute KL divergence between two sets of embeddings modeled as diagonal Gaussians.
+    KL(N_real || N_retrieved)
+    """
+    mu_real, logvar_real = compute_gaussian_stats(real_embeddings)
+    mu_gen, logvar_gen = compute_gaussian_stats(retrieved_embeddings)
+
+    kld = calculate_kl_divergence(mu_real, logvar_real, mu_gen, logvar_gen)
+    return kld
+

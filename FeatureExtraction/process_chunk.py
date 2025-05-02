@@ -1,4 +1,8 @@
 import os
+import sys
+import numpy as np
+
+import os
 import pandas as pd
 import numpy as np
 import torch
@@ -12,10 +16,6 @@ import random
 import argparse
 import tqdm
 
-import utils
-from models import Transformer
-from DataLoader import VideoAudioDataset
-from torch.utils.data import DataLoader, Dataset
 
 import torch
 import numpy as np
@@ -175,36 +175,57 @@ def calc_intersection_over_union(audio_peaks, video_peaks, fps):
                 break
     union = len(audio_peaks) + len(video_peaks) - intersection_length
     return intersection_length / union if union > 0 else 0
+task_id = int(sys.argv[1])
+num_splits = int(sys.argv[2])
 
+test_path = '/work/users/s/m/smerrill/SymMV/test_resnet.csv'
+vid_path = '/work/users/s/m/smerrill/SymMV/video'
+aud_path = '/work/users/s/m/smerrill/SymMV/audio'
 
-## KLD
-def calculate_kl_divergence(mu1, logvar1, mu2, logvar2):
-    """
-    Calculate KL divergence between two diagonal Gaussians:
-    N(mu1, sigma1^2) and N(mu2, sigma2^2)
+# Output directories
+os.makedirs('/work/users/s/m/smerrill/SymMV/video_peaks/', exist_ok=True)
+os.makedirs('/work/users/s/m/smerrill/SymMV/audio_peaks/', exist_ok=True)
 
-    logvar1/logvar2: log of variance vectors (assumed diagonal)
-    Returns scalar KL divergence.
-    """
-    var1 = logvar1.exp()
-    var2 = logvar2.exp()
-    kl = 0.5 * (logvar2 - logvar1 + (var1 + (mu1 - mu2).pow(2)) / var2 - 1)
-    return kl.sum()  # sum over dimensions
+# Load files
+video_files = os.listdir(vid_path)
+audio_files = os.listdir(aud_path)
 
-def compute_gaussian_stats(embeddings, eps=1e-6):
-    """Returns mean and log-variance for embeddings assuming diagonal Gaussian."""
-    mu = embeddings.mean(dim=0)
-    var = embeddings.var(dim=0, unbiased=False) + eps
-    logvar = var.log()
-    return mu, logvar
+with open(test_path, 'r') as file:
+    lines = file.readlines()
+test_ids = [line.replace('.npy\n', '') for line in lines]
 
-def compute_kld(real_embeddings, retrieved_embeddings):
-    """
-    Compute KL divergence between two sets of embeddings modeled as diagonal Gaussians.
-    KL(N_real || N_retrieved)
-    """
-    mu_real, logvar_real = compute_gaussian_stats(real_embeddings)
-    mu_gen, logvar_gen = compute_gaussian_stats(retrieved_embeddings)
+# Filter test files
+test_vid_files = [os.path.join(vid_path, f) for f in video_files if f.split('.')[0] in test_ids]
+test_aud_files = [os.path.join(aud_path, f) for f in audio_files if f.split('.')[0] in test_ids]
 
-    kld = calculate_kl_divergence(mu_real, logvar_real, mu_gen, logvar_gen)
-    return kld
+# Sanity check
+test_vid_files.sort()
+test_aud_files.sort()
+
+# Determine chunk
+chunk_size = len(test_vid_files) // num_splits + (task_id < len(test_vid_files) % num_splits)
+start = (len(test_vid_files) // num_splits) * task_id + min(task_id, len(test_vid_files) % num_splits)
+end = start + chunk_size
+
+for i in range(start, min(end, len(test_vid_files))):
+    try:
+        vid_file = test_vid_files[i]
+        aud_file = test_aud_files[i]
+
+        vid_save_path = vid_file.replace('video', 'video_peaks').rsplit('.', 1)[0] + '.npy'
+        aud_save_path = aud_file.replace('audio', 'audio_peaks').rsplit('.', 1)[0] + '.npy'
+
+        # Skip if both output files already exist
+        if os.path.exists(vid_save_path) and os.path.exists(aud_save_path):
+            print(f"Skipping {i} - already exists: {vid_save_path}, {aud_save_path}")
+            continue
+
+        frames, fps = extract_frames(vid_file)
+        _, video_peaks = detect_video_peaks(frames, fps)
+        audio_peaks = detect_audio_peaks(aud_file)
+
+        np.save(vid_save_path, video_peaks)
+        np.save(aud_save_path, audio_peaks)
+
+    except Exception as e:
+        print(f"Error processing index {i}: {e}")

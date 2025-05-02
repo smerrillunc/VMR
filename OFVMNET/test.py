@@ -18,7 +18,7 @@ from DataLoader import VideoAudioTestset
 from torch.utils.data import DataLoader, Dataset
 
 import metrics
-
+import wandb
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument("-bs", "--batch_size", type=int, default=128, help='Train Batch Size')
 
     # Longleaf
-    parser.add_argument("-vmp", "--model_path", type=str, default='/work/users/s/m/smerrill/OFVMNET/models/resnet', help='model checkpoint path')        
+    parser.add_argument("-vmp", "--model_path", type=str, default='/work/users/s/m/smerrill/OFVMNET/models/resnet2', help='model checkpoint path')        
 
     parser.add_argument("-sp", "--save_path", type=str, default='/work/users/s/m/smerrill/OFVMNET/models/resnet/', help='save path')    
 
@@ -42,8 +42,33 @@ if __name__ == '__main__':
     parser.add_argument("-afp", "--audio_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/vggish', help='Path to audio Features File')
     parser.add_argument("-frf", "--flow_ranks_file", type=str, default='/work/users/s/m/smerrill/Youtube8m/flow/ranks.csv', help='Path to OF ranks file')
 
-    
+    parser.add_argument("-ps", "--pad_size", type=int, default=0, help='Pad Size')
+
     args = vars(parser.parse_args())
+
+    features = args['video_feature_path'].split('/')[-1]
+    dataset = args['video_feature_path'].split('smerrill/')[1].split('/')[0]
+    run_name = f'{dataset}_{features}_{str(args['pad_size'])}'
+    print(features, dataset)
+
+    base_directory = os.path.dirname(args['flow_ranks_file'])  # Get the directory
+    file_name = os.path.basename(args['flow_ranks_file'])  # Get the base file name (e.g., 'ranks.csv')
+
+    # Modify the file name based on pad_size
+    if args['pad_size'] == 0:
+        flow_ranks_file = os.path.join(base_directory, file_name)
+    else:
+        file_name_with_pad = f'ranks_{args['pad_size']}.csv'  # Adjust the file name based on pad_size
+        flow_ranks_file = os.path.join(base_directory, file_name_with_pad)
+
+
+    wandb.init(
+        project="OFVMNET",  # Change this to your preferred project name
+        name=run_name,  # Set custom run name
+        config={
+            "padding": args['pad_size'],
+            "video_feature_dir": args['video_feature_path'],
+            'flow_ranks_file':flow_ranks_file})
 
     # make checkpoint dir
     os.makedirs(args['save_path'], exist_ok=True)
@@ -60,11 +85,11 @@ if __name__ == '__main__':
     print("Video and Audio Models Loaded!")
 
     # limit to 1600 examples for Youtube8m
-    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], args['flow_ranks_file'], args['max_seq_len']).head(1600)
+    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], flow_ranks_file, args['max_seq_len']).head(1600)
     print(f"Total Training Examples: {len(meta_df)}")
 
     vid_dict, aud_dict = utils.create_feature_to_file_dicts(args['raw_video_path'], args['video_feature_path'], args['raw_audio_path'], args['audio_feature_path'])
-    dataset = VideoAudioTestset(meta_df, vid_dict, aud_dict)
+    dataset = VideoAudioTestset(meta_df, vid_dict, aud_dict, args['pad_size'])
     dataloader = DataLoader(dataset, batch_size=args['batch_size'], shuffle=True, collate_fn=utils.custom_collate_testset)
 
 
@@ -88,6 +113,13 @@ if __name__ == '__main__':
         recall = [metrics.top_k_recall(similarity_matrix, k) for k in ks]
         print(f"Recalls {recall}")
 
+        wandb.log({
+            "batch": int(batch),
+            "XY_R@1": recall[0],
+            "XY_R@5": recall[1],
+            "XY_R@10": recall[2],
+        })
+
         retrieved_audio_embeddings = batch_aud_embeddings[most_similar_indices]
 
         # Compute FAD/AV-Align
@@ -95,6 +127,31 @@ if __name__ == '__main__':
         retrievals = []
         av_aligns = []
         got_aligns = []
+        for idx, retrieval in enumerate(most_similar_indices):
+            try:
+                # for FAD
+                gots.append(batch_aud_embeddings[idx])
+                retrievals.append(batch_aud_embeddings[retrieval])
+    
+            except Exception as e:
+                print(e)
+
+
+        got_embeddings = torch.stack(gots).detach()
+        retrieved_embeddings = torch.stack(retrievals).detach()     
+        fad_score = metrics.compute_fad(got_embeddings, retrieved_embeddings)
+        kld1_score = metrics.compute_kld(got_embeddings, retrieved_embeddings)
+        kld2_score = metrics.compute_kld(retrieved_embeddings, got_embeddings)
+
+        print(f'FAD: {fad_score}')
+        wandb.log({
+            "batch": int(batch),
+            "FAD": fad_score,
+            "KLD1": kld1_score,
+            "KLD2": kld2_score,
+        })
+
+
         for idx, retrieval in enumerate(most_similar_indices):
             try:
                 # for FAD
@@ -111,14 +168,24 @@ if __name__ == '__main__':
                 got_av_align = metrics.calc_intersection_over_union(audio_peaks2, video_peaks, fps)
     
                 print(f'idx {idx}, AV-ALIGN: {av_align}, GOT-AV-ALIGN: {got_av_align}')
+
+                wandb.log({
+                    "idx": int(idx),
+                    "av_align": av_align,
+                    "got_av_align": got_av_align,
+                })
+
                 av_aligns.append(av_align)
                 got_aligns.append(got_av_align)
             except Exception as e:
                 print(e)
 
-            
-        fad_score = metrics.compute_fad(torch.stack(gots).detach(), torch.stack(retrievals).detach())
-        print(f'FAD: {fad_score}')
+
+        wandb.log({
+            "batch": int(batch),
+            "Average AV-ALIGN": sum(av_aligns) / len(av_aligns),
+            "Average GOT-AV-ALIGN": sum(got_aligns) / len(got_aligns),
+        })
 
         with open(summary_file, "a") as f:
             f.write(f"Batch {batch}\n")

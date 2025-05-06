@@ -1,7 +1,7 @@
 # Video to Music Retrieval (VMR)
 
 ## Description  
-This repository contains scripts and code for video-to-music retrieval, including feature extraction and VMNET model adaptation.
+This repository contains scripts and code for video-to-music retrieval, including feature extraction and VM-Net model adaptation.
 
 ---
 
@@ -27,7 +27,7 @@ This folder includes several scripts to perform feature extraction as described 
 ## 2. VMNET  
 This folder contains code adapted from the official [VMNET repository](https://github.com/csehong/VM-NET). The original code was incomplete and required modifications, including dataloaders, to make it functional.  
 
-### **How to Run VMNET**  
+### **How to Run VM-Net**  
 
 #### **a. Organizing Features**  
 Organize the extracted features in the following structure:  

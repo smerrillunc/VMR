@@ -72,11 +72,12 @@ def create_feature_to_file_dicts(vid_path, vid_feature_path, aud_path, aud_featu
 
 
 
-def get_meta_df(video_feature_path, audio_feature_path, flow_rank_file, max_seq_len):
+def get_meta_df(video_feature_path, audio_feature_path, flow_rank_file, max_seq_len, test_file=None):
     def parse_ranks_str(ranks_str):
         # Remove tuple and quotes, then extract numbers
         cleaned = ranks_str.strip("(),'")  # removes parentheses, commas, quotes
         return list(map(int, cleaned.strip('[]').split()))
+
 
     video_files = os.listdir(video_feature_path)
     audio_files = os.listdir(audio_feature_path)
@@ -99,6 +100,14 @@ def get_meta_df(video_feature_path, audio_feature_path, flow_rank_file, max_seq_
     # drop entire videos who's max sequence length doesn't comply
     df = df[df['segments'].apply(lambda s: max(np.diff(ast.literal_eval(s))) <= max_seq_len)].reset_index(drop=True)
 
+    if test_file:
+        # Open and read the CSV file
+        with open(test_file, 'r') as file:
+            lines = file.readlines()
+
+        # only get vids in test file
+        vids = [line.split('.')[0] for line in lines]
+        df = df[df.vid.isin(vids)].reset_index(drop=True)
     return df
 
 def custom_collate(batch):
@@ -111,18 +120,18 @@ def custom_collate_testset(batch):
     # Return as lists so you can deal with variable shapes manually
     return list(videos), list(audios), list(segments), list(vidfile), list(audfile)
 
-def perform_feature_padding(video_features, audio_features, start_segment, end_segment, max_seq_len):
+def perform_feature_padding(video_features, audio_features, start_segment, end_segment, max_seq_len, device='cpu'):
     #vf = video_features.clone().detach()
     #af = audio_features.clone().detach()
 
     vf =video_features[start_segment:end_segment,:]
     af = audio_features[start_segment:end_segment,:]
 
-    pvf = torch.zeros(max_seq_len, vf.shape[1])
-    pvf[:vf.shape[0], :] = torch.tensor(vf)
+    pvf = torch.zeros(max_seq_len, vf.shape[1], device=device)
+    pvf[:vf.shape[0], :] = torch.tensor(vf, device=device)
 
-    paf = torch.zeros(max_seq_len, af.shape[1])
-    paf[:af.shape[0], :] = torch.tensor(af)
+    paf = torch.zeros(max_seq_len, af.shape[1], device=device)
+    paf[:af.shape[0], :] = torch.tensor(af, device=device)
 
     # Create mask (True for padding positions)
     mask = torch.arange(max_seq_len) >= vf.shape[0]
@@ -142,7 +151,7 @@ def save_checkpoint(model, optimizer, epoch, filename):
     print(f"Checkpoint saved at epoch {epoch} to {filename}")
 
 
-def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, segments):
+def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, segments, device='cpu'):
 
     vid_segment_embeddings = []
     aud_segment_embeddings = []
@@ -150,15 +159,15 @@ def get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, seg
         start = segments[i-1]
         end = segments[i]
 
-        vid_emb, aud_emb, mask = perform_feature_padding(vid, aud, start, end, max_seq_len)
+        vid_emb, aud_emb, mask = perform_feature_padding(vid, aud, start, end, max_seq_len, device)
         
-        vid_segment_embeddings.append(video_model(vid_emb, mask))
-        aud_segment_embeddings.append(audio_model(aud_emb, mask))
+        vid_segment_embeddings.append(video_model(vid_emb.to(device), mask.to(device)))
+        aud_segment_embeddings.append(audio_model(aud_emb.to(device), mask.to(device)))
     return vid_segment_embeddings, aud_segment_embeddings
 
 
 
-def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max_seq_len, segments):
+def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max_seq_len, segments, device='cpu'):
     # We precompute the segment embeddings in each batch.  We do this once and then proceed to processing batch
     batch_vid_embeddings = []
     batch_aud_embeddings = []
@@ -166,7 +175,7 @@ def get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, max
         vid = video_batch[i]
         aud = audio_batch[i]
 
-        vid_sgmt_emb, aud_sgmt_emb = get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, segments[i])
+        vid_sgmt_emb, aud_sgmt_emb = get_segmentd_embeddings(video_model, audio_model, vid, aud, max_seq_len, segments[i], device)
         batch_vid_embeddings.extend(vid_sgmt_emb)
         batch_aud_embeddings.extend(aud_sgmt_emb)
         

@@ -29,6 +29,7 @@ class VideoAudioTestset(Dataset):
         self.aud_dict = aud_dict
         self.pad_size = pad_size
 
+
     @staticmethod
     def pad_or_truncate(arr, pad_length=400):
         """

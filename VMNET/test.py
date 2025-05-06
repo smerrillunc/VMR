@@ -12,6 +12,7 @@ import csv
 import torch
 import gc
 import wandb
+import cv2
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -158,15 +159,35 @@ with tf.Session() as sess:
 
             for idx, retrieval in enumerate(top1):
                 try:
+                    video_file = video_files[idx]
+                    audio_file = audio_files[retrieval[0]]
+                    got_audio_file = audio_files[idx]
+
+                    cap = cv2.VideoCapture(video_file)
+                    if not cap.isOpened():
+                        raise ValueError(f"Error: Unable to open video {video_file}.")
+
+                    frame_skip = 5
+                    original_fps = cap.get(cv2.CAP_PROP_FPS)
+                    fps = original_fps / frame_skip
+
+
+                    video_peaks_file = video_file.replace('video', 'video_peaks').split('.')[0] + '.npy'
+                    audio_peaks_file = audio_file.replace('audio', 'audio_peaks').split('.')[0] + '.npy'
+                    got_audio_peaks_file = got_audio_file.replace('audio', 'audio_peaks').split('.')[0] + '.npy'
+        
                     # Av-align
-                    frames, fps = metrics.extract_frames(video_files[idx])
-                    _, video_peaks = metrics.detect_video_peaks(frames, fps)
+                    video_peaks = np.load(video_peaks_file)
     
-                    audio_peaks1 = metrics.detect_audio_peaks(audio_files[retrieval[0]])
-                    audio_peaks2 = metrics.detect_audio_peaks(audio_files[idx])
+                    audio_peaks1 = np.load(audio_peaks_file)
+                    audio_peaks2 = np.load(got_audio_peaks_file)
+
                     av_align = metrics.calc_intersection_over_union(audio_peaks1, video_peaks, fps)
                     got_av_align = metrics.calc_intersection_over_union(audio_peaks2, video_peaks, fps)
     
+                    if got_av_align == 0:
+                        print("Error computin AV-ALGIN")
+
                     print(f'idx {idx}, AV-ALIGN: {av_align}, GOT-AV-ALIGN: {got_av_align}')
                     av_aligns.append(av_align)
                     got_aligns.append(got_av_align)
@@ -191,34 +212,3 @@ with tf.Session() as sess:
                 "Mean_AV_ALIGN": np.mean(av_aligns),
                 "Mean_GOT_AV_ALIGN": np.mean(got_aligns),
             })
-
-            csv_path = os.path.join(checkpoint_dir, f"metrics_step_{step}.csv")
-
-            with open(csv_path, mode='w', newline='') as file:
-                writer = csv.writer(file)
-                # Write header
-                writer.writerow(['Index', 'Top1_Index', 'AV_ALIGN', 'GOT_AV_ALIGN'])
-
-                for idx, retrieval in enumerate(top1):
-                    writer.writerow([idx, retrieval[0], av_aligns[idx], got_aligns[idx]])
-
-                # Add summary statistics at the end
-                writer.writerow([])
-                writer.writerow(['Summary'])
-                writer.writerow(['FAD', fad_score])
-                writer.writerow(['Overall_XY_R@1', xy[0]])
-                writer.writerow(['Overall_XY_R@5', xy[1]])
-                writer.writerow(['Overall_XY_R@10', xy[2]])
-                writer.writerow(['Overall_XY_R@20', xy[3]])
-                writer.writerow(['Overall_XY_R@50', xy[4]])
-                writer.writerow(['Overall_XY_R@100', xy[5]])
-                writer.writerow(['Overall_YX_R@1', yx[0]])
-                writer.writerow(['Overall_YX_R@5', yx[1]])
-                writer.writerow(['Overall_YX_R@10', yx[2]])
-                writer.writerow(['Overall_YX_R@20', yx[3]])
-                writer.writerow(['Overall_YX_R@50', yx[4]])
-                writer.writerow(['Overall_YX_R@100', yx[5]])
-                writer.writerow(['Mean_AV_ALIGN', np.mean(av_aligns)])
-                writer.writerow(['Mean_GOT_AV_ALIGN', np.mean(got_aligns)])
-
-

@@ -56,6 +56,7 @@ if __name__ == '__main__':
 
     
     args = vars(parser.parse_args())
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # make checkpoint dir
     os.makedirs(args['save_path'], exist_ok=True)
@@ -64,6 +65,9 @@ if __name__ == '__main__':
 
     video_model = Transformer(input_dim=args['input_dim_video'], embed_dim=args['embed_dim'], \
                              num_heads=args['num_heads'], num_layers=args['num_layers'], max_seq_len=args['max_seq_len'])
+
+    audio_model.to(device)
+    video_model.to(device)
 
     # Define the Adam optimizer for the audio model
     audio_optimizer = optim.Adam(audio_model.parameters(), lr=args['learning_rate'])
@@ -82,13 +86,14 @@ if __name__ == '__main__':
 
     df = pd.DataFrame()
     epoch=0
-    utils.save_checkpoint(video_model, video_optimizer, epoch, args['save_path'] + f'/video_{epoch}.pth')
-    utils.save_checkpoint(audio_model, audio_optimizer, epoch, args['save_path'] + f'/audio_{epoch}.pth')
     print("Model Saved")
     # Batch iterator
     for epoch in tqdm.tqdm(range(args['epochs'])):
         print(f"Starting Epoch {epoch}")
         for idx, (video_batch, audio_batch, segments, flow_ranks) in enumerate(dataloader):
+            video_batch = [torch.tensor(x).to(device) for x in video_batch]
+            audio_batch = [torch.tensor(x).to(device) for x in audio_batch]
+
             try:
 
                 audio_optimizer.zero_grad()
@@ -96,7 +101,7 @@ if __name__ == '__main__':
 
                 # create segments for each batch and compute embeddings for the segments
                 # stack all the embeddings into single tensors
-                batch_aud_embeddings, batch_vid_embeddings = utils.get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, args['max_seq_len'], segments)
+                batch_aud_embeddings, batch_vid_embeddings = utils.get_batch_embeddings(video_model, audio_model, video_batch, audio_batch, args['max_seq_len'], segments, device)
 
                 
                 # 1. Inter-modal loss
@@ -125,13 +130,23 @@ if __name__ == '__main__':
 
                 of_loss_top = 0
                 for anchor, pos, neg in top_matching_samples:
+                	# intra modal
                     of_loss_top += triplet_loss(batch_vid_embeddings[anchor], batch_vid_embeddings[pos], batch_vid_embeddings[neg])
                     of_loss_top += triplet_loss(batch_aud_embeddings[anchor], batch_aud_embeddings[pos], batch_aud_embeddings[neg])
 
+                    # inter-modal
+                    of_loss_top += triplet_loss(batch_vid_embeddings[anchor], batch_aud_embeddings[pos], batch_vid_embeddings[neg])
+                    of_loss_top += triplet_loss(batch_aud_embeddings[anchor], batch_vid_embeddings[pos], batch_aud_embeddings[neg])
+
                 of_loss_bottom = 0
                 for anchor, pos, neg in bottom_matching_samples:
+                	# intra modal
                     of_loss_bottom += triplet_loss(batch_vid_embeddings[anchor], batch_vid_embeddings[pos], batch_vid_embeddings[neg])
                     of_loss_bottom += triplet_loss(batch_aud_embeddings[anchor], batch_aud_embeddings[pos], batch_aud_embeddings[neg])
+
+                    # inter-modal
+                    of_loss_bottom += triplet_loss(batch_vid_embeddings[anchor], batch_aud_embeddings[pos], batch_vid_embeddings[neg])
+                    of_loss_bottom += triplet_loss(batch_aud_embeddings[anchor], batch_vid_embeddings[pos], batch_aud_embeddings[neg])
 
                 loss = args['lambda1']*inter_modal_loss + args['lambda2']*of_loss_top + args['lambda3']*of_loss_bottom
                 loss.backward()

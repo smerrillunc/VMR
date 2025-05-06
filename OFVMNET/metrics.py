@@ -27,6 +27,7 @@ import torch
 import torchaudio
 import torchaudio.functional as F
 import torchaudio.transforms as T
+from scipy.signal import find_peaks
 
 
 ## Recall Function
@@ -100,22 +101,66 @@ def compute_fad(real_embeddings, retrieved_embeddings):
 
 
 ## AV-ALIGN Functions
-# Function to extract frames from a video file
-def extract_frames(video_path):
-    frames = []
-    cap = cv2.VideoCapture(video_path)
-    frame_rate = cap.get(cv2.CAP_PROP_FPS)
+def detect_video_peaks(frames, fps, threshold=1, distance=3):
+    """
+    Detect motion peaks using optical flow and find_peaks.
+    
+    Args:
+        frames: list of grayscale frames
+        fps: frames per second (adjusted for skipping)
+        threshold: minimum peak height (motion strength)
+        distance: minimum number of frames between peaks
 
+    Returns:
+        flow_trajectory: List of average flow magnitudes
+        peak_times: Timestamps of detected peaks (in seconds)
+    """
+    distance = distance * fps
+    # Compute optical flow magnitudes between consecutive frames
+    flow_trajectory = [
+        compute_of(frames[i - 1], frames[i])
+        for i in range(1, len(frames))
+    ]
+
+    # Use scipy to detect peaks
+    peak_indices, properties = find_peaks(
+        flow_trajectory,
+        height=threshold,       # Minimum motion strength
+        distance=distance       # Minimum distance between peaks
+    )
+
+    # Convert frame indices to time
+    peak_times = [idx / fps for idx in peak_indices]
+
+    return flow_trajectory, peak_times
+
+
+def extract_frames(video_path, frame_skip=5, downsample_factor=2):
+    """Extract grayscale, downsampled frames from video with frame skipping."""
+    cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError(f"Error: Unable to open video {video_path}.")
 
-    ret, frame = cap.read()
-    while ret:
-        frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))  # directly grayscale for OF
-        ret, frame = cap.read()
+    original_fps = cap.get(cv2.CAP_PROP_FPS)
+    frames = []
+    frame_idx = 0
+
+    while True:
+        success, frame = cap.read()
+        if not success:
+            break
+        if frame_idx % frame_skip == 0:
+            if downsample_factor > 1:
+                h, w = frame.shape[:2]
+                frame = cv2.resize(frame, (w // downsample_factor, h // downsample_factor))
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frames.append(gray)
+        frame_idx += 1
 
     cap.release()
-    return frames, frame_rate
+
+    effective_fps = original_fps / frame_skip
+    return frames, effective_fps
 
 def detect_audio_peaks(audio_file):
     waveform, sr = torchaudio.load(audio_file)
@@ -154,14 +199,7 @@ def compute_of(prev_gray, curr_gray):
     avg_magnitude = magnitude.mean()
     return avg_magnitude
 
-# Function to detect video peaks
-def detect_video_peaks(frames, fps):
-    flow_trajectory = [
-        compute_of(frames[i-1], frames[i])
-        for i in range(1, len(frames))
-    ]
-    video_peaks = find_local_max_indexes(flow_trajectory, fps)
-    return flow_trajectory, video_peaks
+
 
 # Function to calculate Intersection over Union (IoU)
 def calc_intersection_over_union(audio_peaks, video_peaks, fps):

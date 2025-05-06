@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader, Dataset
 
 import metrics
 import wandb
+import cv2
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)
@@ -41,6 +42,7 @@ if __name__ == '__main__':
     parser.add_argument("-vfp", "--video_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/resnet/resnet101', help='Path to video Features File')
     parser.add_argument("-afp", "--audio_feature_path", type=str, default='/work/users/s/m/smerrill/Youtube8m/vggish', help='Path to audio Features File')
     parser.add_argument("-frf", "--flow_ranks_file", type=str, default='/work/users/s/m/smerrill/Youtube8m/flow/ranks.csv', help='Path to OF ranks file')
+    parser.add_argument("-tcsv", "--test_csv_file", type=str, default='/work/users/s/m/smerrill/Youtube8m/test_resnet.csv', help='Path to OF ranks file')
 
     parser.add_argument("-ps", "--pad_size", type=int, default=0, help='Pad Size')
 
@@ -67,6 +69,7 @@ if __name__ == '__main__':
         name=run_name,  # Set custom run name
         config={
             "padding": args['pad_size'],
+            "dataset": dataset,
             "video_feature_dir": args['video_feature_path'],
             'flow_ranks_file':flow_ranks_file})
 
@@ -75,17 +78,18 @@ if __name__ == '__main__':
     summary_file = os.path.join(args['save_path'], "summaries.txt")
 
     video_model_path, audio_model_path = utils.get_latest_models(args['model_path'])
-    video_checkpoint = torch.load(video_model_path)
+    print(video_model_path, audio_model_path)
+    video_checkpoint = torch.load(video_model_path, map_location=torch.device('cpu') )
     video_model = Transformer(**video_checkpoint['model_args'])
     video_model.load_state_dict(video_checkpoint['model_state_dict'])
 
-    audio_checkpoint = torch.load(audio_model_path)
+    audio_checkpoint = torch.load(audio_model_path, map_location=torch.device('cpu') )
     audio_model = Transformer(**audio_checkpoint['model_args'])
     audio_model.load_state_dict(audio_checkpoint['model_state_dict'])
     print("Video and Audio Models Loaded!")
 
     # limit to 1600 examples for Youtube8m
-    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], flow_ranks_file, args['max_seq_len']).head(1600)
+    meta_df = utils.get_meta_df(args['video_feature_path'], args['audio_feature_path'], flow_ranks_file, args['max_seq_len'], args['test_csv_file'])
     print(f"Total Training Examples: {len(meta_df)}")
 
     vid_dict, aud_dict = utils.create_feature_to_file_dicts(args['raw_video_path'], args['video_feature_path'], args['raw_audio_path'], args['audio_feature_path'])
@@ -154,22 +158,39 @@ if __name__ == '__main__':
 
         for idx, retrieval in enumerate(most_similar_indices):
             try:
-                # for FAD
-                gots.append(batch_aud_embeddings[idx])
-                retrievals.append(batch_aud_embeddings[retrieval])
+                video_file = vidfiles[idx]
+                audio_file = audfiles[retrieval]
+                got_audio_file = audfiles[idx]
+
+                cap = cv2.VideoCapture(video_file)
+                if not cap.isOpened():
+                    raise ValueError(f"Error: Unable to open video {video_file}.")
+
+                frame_skip = 5
+                original_fps = cap.get(cv2.CAP_PROP_FPS)
+                fps = original_fps / frame_skip
+
+
+                video_peaks_file = video_file.replace('video', 'video_peaks').split('.')[0] + '.npy'
+                audio_peaks_file = audio_file.replace('audio', 'audio_peaks').split('.')[0] + '.npy'
+                got_audio_peaks_file = got_audio_file.replace('audio', 'audio_peaks').split('.')[0] + '.npy'
     
                 # Av-align
-                frames, fps = metrics.extract_frames(vidfiles[idx])
-                _, video_peaks = metrics.detect_video_peaks(frames, fps)
-    
-                audio_peaks1 = metrics.detect_audio_peaks(audfiles[retrieval])
-                audio_peaks2 = metrics.detect_audio_peaks(audfiles[idx])
+                video_peaks = np.load(video_peaks_file)
+
+                audio_peaks1 = np.load(audio_peaks_file)
+                audio_peaks2 = np.load(got_audio_peaks_file)
+
                 av_align = metrics.calc_intersection_over_union(audio_peaks1, video_peaks, fps)
                 got_av_align = metrics.calc_intersection_over_union(audio_peaks2, video_peaks, fps)
     
+                if got_av_align == 0:
+                    print("Error computin AV-ALGIN")
+                    
                 print(f'idx {idx}, AV-ALIGN: {av_align}, GOT-AV-ALIGN: {got_av_align}')
 
                 wandb.log({
+                    "batch": int(batch),
                     "idx": int(idx),
                     "av_align": av_align,
                     "got_av_align": got_av_align,
